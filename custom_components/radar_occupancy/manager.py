@@ -407,7 +407,8 @@ class RadarOccupancyManager:
             if room.room.update(now):
                 changed.add(entry_id)
         rooms = list(self.rooms.values())
-        for released in handover([r.room for r in rooms], now):
+        handovers = handover([r.room for r in rooms], now) if self.home is None or self.home.handover else []
+        for released in handovers:
             changed.update(r.entry_id for r in rooms if r.room is released)
         self.lights.evaluate(now)
         for target in self.targets:

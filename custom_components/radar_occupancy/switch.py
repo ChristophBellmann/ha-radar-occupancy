@@ -18,7 +18,7 @@ from .manager import RoomTarget, Target
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEntitiesCallback) -> None:
     target: Target | Home = entry.runtime_data
     if isinstance(target, Home):
-        add([HomeSwitch(target, "light_automation"), HomeSwitch(target, "map_mode")])
+        add([HomeSwitch(target, "light_automation"), HomeSwitch(target, "map_mode"), HomeSwitch(target, "handover")])
         return
     entities: list[SwitchEntity] = []
     if target.light:
@@ -71,7 +71,8 @@ class HoldSwitch(RadarOccupancyEntity, SwitchEntity):
 
 
 class HomeSwitch(RadarOccupancyEntity, SwitchEntity):
-    """Light automation of the whole home; map mode (off: distance rule only)."""
+    """Light automation of the whole home; map mode (off: distance rule only);
+    handover between rooms (off with visitors)."""
 
     def __init__(self, home: Home, key: str) -> None:
         super().__init__(home, key)

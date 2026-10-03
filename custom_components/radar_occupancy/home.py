@@ -123,6 +123,8 @@ class Home:
         settings = manager.saved.setdefault("home", {})
         self.map_mode: bool = settings.get("map_mode", True)
         self.light_automation: bool = settings.get("light_automation", True)
+        # Off pauses handover between rooms of the distance rule, e.g. with visitors.
+        self.handover: bool = settings.get("handover", True)
         self.fade_in: float = settings.get("fade_in", 2.0)
         self.fade_out: float = settings.get("fade_out", 3.0)
         data = manager.saved.setdefault("map", {})

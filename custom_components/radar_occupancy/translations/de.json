@@ -181,6 +181,9 @@
       },
       "map_mode": {
         "name": "Kartenmodus"
+      },
+      "handover": {
+        "name": "Übergabe zwischen Räumen"
       }
     },
     "number": {

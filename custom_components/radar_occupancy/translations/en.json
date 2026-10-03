@@ -181,6 +181,9 @@
       },
       "map_mode": {
         "name": "Map mode"
+      },
+      "handover": {
+        "name": "Handover between rooms"
       }
     },
     "number": {

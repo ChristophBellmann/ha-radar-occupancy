@@ -269,6 +269,31 @@ async def test_handover(hass: HomeAssistant, freezer: FrozenDateTimeFactory) -> 
     assert state.attributes["reason"] == "handed_over"
 
 
+async def test_handover_switch_off_with_guests(hass: HomeAssistant, freezer: FrozenDateTimeFactory) -> None:
+    from custom_components.radar_occupancy.const import HOME_DEFAULTS, KIND_HOME
+
+    home = MockConfigEntry(
+        domain=DOMAIN, title="Flat", data={CONF_KIND: KIND_HOME}, options=dict(HOME_DEFAULTS), unique_id="home"
+    )
+    lab = room_entry("Lab", "lab", **{CONF_DOOR_FROM: 2750, CONF_HANDOVER: True, CONF_HANDOVER_ANYWHERE: True})
+    office = room_entry("Office", "office", **{CONF_DOOR_FROM: 4000, CONF_HANDOVER: True})
+    await setup(hass, home, lab, office)
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": "switch.flat_handover_between_rooms"}, blocking=True
+    )
+    see(hass, "lab", 1300)
+    await hass.async_block_till_done()
+    lose(hass, "lab")
+    see(hass, "office", 1000)
+    await advance(hass, freezer, 60)
+    assert occupancy(hass, "lab") == "on"
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": "switch.flat_handover_between_rooms"}, blocking=True
+    )
+    await advance(hass, freezer, 2)
+    assert hass.states.get("binary_sensor.lab").attributes["reason"] == "handed_over"
+
+
 async def test_area_and_release_and_learn(hass: HomeAssistant, freezer: FrozenDateTimeFactory) -> None:
     lab = room_entry("Lab", "lab", **{CONF_DOOR_FROM: 2750})
     await setup(hass, lab)
