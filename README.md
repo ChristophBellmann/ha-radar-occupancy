@@ -120,7 +120,8 @@ and X/Y of targets 2 and 3. Map segments without a radar count as outside.
 Exits the map does not show (stairs, front door) are marked on the card.
 
 Then calibrate each sensor on the **position card**
-(`type: custom:radar-occupancy-card`, loaded automatically): place it on the
+(`type: custom:radar-occupancy-card`, loaded automatically; its texts are
+German only for now): place it on the
 map and turn its field of view until your dot appears where you stand (wall),
 or take three or more samples (ceiling). Distorted calibrations are detected;
 such rooms keep their distance rule. Walking towards a door pre-lights the
@@ -203,4 +204,5 @@ Licht: von Hand ausgeschaltet bleibt aus (auch nach kurzem Verlassen),
 weiches Ein- und Ausblenden, Vorblenden bei Annäherung. Eingemessen wird in
 der Positionskarte `custom:radar-occupancy-card`.
 
-Die Oberfläche ist auf Deutsch und Englisch übersetzt.
+Einrichtung und Entitäten sind auf Deutsch und Englisch übersetzt; die
+Positionskarte gibt es bisher nur auf Deutsch.
