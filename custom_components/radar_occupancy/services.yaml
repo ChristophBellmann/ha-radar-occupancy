@@ -151,3 +151,24 @@ refresh_maps:
 release:
   fields:
     room: *room
+
+simulate:
+  name: Simulate a walk
+  description: Replay map positions with virtual lights. Actual sensors, lights and stored occupancy are unchanged. Returns a timeline and intended commands.
+  fields:
+    room:
+      description: Room entry ID or occupancy entity. Without a route, simulates entering and sitting still.
+      selector:
+        text:
+    route:
+      description: List of waypoints with room, map x/y in mm and seconds (0.5–120). Omit room for radar dropout. Maximum 30 waypoints.
+      selector:
+        object:
+    held:
+      description: Start with one virtual held occupant in each mapped room.
+      selector:
+        boolean:
+    ignore_restrictions:
+      description: Ignore darkness and time windows in this simulation only.
+      selector:
+        boolean:

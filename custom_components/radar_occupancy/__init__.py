@@ -10,7 +10,7 @@ from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
@@ -240,6 +240,46 @@ def _register_services(hass: HomeAssistant) -> None:
         "refresh_maps": (refresh_maps, vol.Schema({})),
         "release": (release, vol.Schema(ROOM)),
     }
+
+    async def simulation(call: ServiceCall) -> dict:
+        from .simulation import room_route, simulate
+
+        manager = get_manager(hass)
+        try:
+            route = call.data.get("route")
+            if route is None:
+                if not call.data.get("room"):
+                    raise HomeAssistantError("Choose a room or supply a simulation route.")
+                route = room_route(manager, call.data["room"])
+            return simulate(
+                manager, route, held=call.data["held"], ignore_restrictions=call.data["ignore_restrictions"]
+            )
+        except KeyError as err:
+            raise HomeAssistantError("Unknown room in simulation route.") from err
+
+    waypoint = vol.Schema(
+        {
+            vol.Optional("room"): cv.string,
+            vol.Optional("x"): COORD,
+            vol.Optional("y"): COORD,
+            vol.Optional("seconds", default=3): vol.All(vol.Coerce(float), vol.Range(min=0.5, max=120)),
+        }
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "simulate",
+        simulation,
+        schema=vol.Schema(
+            {
+                vol.Optional("room"): cv.string,
+                vol.Optional("route"): vol.All([waypoint], vol.Length(min=1, max=30)),
+                vol.Optional("held", default=False): cv.boolean,
+                vol.Optional("ignore_restrictions", default=False): cv.boolean,
+            }
+        ),
+        supports_response=SupportsResponse.ONLY,
+    )
+
     for name, (handler, schema) in schemas.items():
         hass.services.async_register(DOMAIN, name, handler, schema=schema)
 

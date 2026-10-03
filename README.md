@@ -311,3 +311,49 @@ bestehende Raumbelegung, Kalibrierung, Freigabe und Lichtsteuerung prüfen. Beim
 Umstieg vorhandene Lichtautomatik je Raum ablösen, damit nur eine Steuerung das
 Licht schaltet. Ein lokales Update-Skript gehört zum jeweiligen privaten
 Konfigurationsrepo; es übernimmt nur den Code aus diesem öffentlichen Repo.
+
+## Simulation / Simulation eines Rundgangs
+
+The position card's **Simulate room** button runs entry and sitting-still
+observations in a virtual copy of your mapped home. It shows intended light
+commands. It requires a calibrated room and loaded map. The default starts
+with virtual lights off and no occupants; actual sensors, lights and held
+occupancy stay unchanged. The card bypasses darkness/time limits in this test.
+
+**Raum simulieren** testet Eintritt und Sitzenbleiben mit deiner lokalen Karte.
+Die Ausgabe zeigt virtuelle Lichtbefehle. Echte Lampen und Belegungen werden
+nicht geändert. Für einen eigenen Weg nutze **Entwicklerwerkzeuge → Aktionen**:
+
+```yaml
+action: radar_occupancy.simulate
+data:
+  ignore_restrictions: true
+  held: false
+  route:
+    - room: binary_sensor.example_room_occupancy
+      x: 2000
+      y: 3000
+      seconds: 4
+    - seconds: 5  # No observation: radar loses someone sitting still.
+    - room: binary_sensor.example_room_occupancy
+      x: 3000
+      y: 2000
+      seconds: 2
+response_variable: walk_report
+```
+
+Replace entity IDs and coordinates with your own. Coordinates are **map
+millimetres**, before display rotation, not radar millimetres or screen pixels.
+Room entry IDs or occupancy entity IDs are accepted. Add closely spaced
+waypoints towards a door and into the next room to test a handover; losing a
+target in the middle of a room deliberately keeps it occupied. Sub-areas are
+recognized using the configured parent sensor transform and radar boundaries.
+The response contains `timeline`, `commands` and `unavailable_lights`.
+
+`held: true` starts with one virtual held person per mapped room. Darkness and
+time windows apply unless `ignore_restrictions: true`. Auto-light settings are
+respected; the sandbox enables its own master switch. The action is bounded
+at 30 waypoints, each 0.5–120 seconds; it runs virtual time immediately.
+It tests decisions and reports fade intentions, not radio coverage, physical
+lamp acknowledgement, real fade timing or cloud/network delays. No private
+map data is shipped in this public repository.

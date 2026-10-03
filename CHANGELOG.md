@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.2
+
+- Public `radar_occupancy.simulate` response action replays local map waypoints
+  through the production tracking and light decision logic in an isolated
+  sandbox. Reports a timeline, intended light commands, brightness, fade
+  duration and unavailable lights; no real sensor or light states are changed.
+- Position card adds **Simulate room** / **Raum simulieren** for an entry and
+  sitting-still test. Custom multi-room routes and held starting counts are
+  supported through the action. Darkness/time restrictions can be bypassed
+  for a simulation without changing the installation settings.
+
 ## 0.3.1
 
 - A confirmed live target can switch on an automatic light in a room whose

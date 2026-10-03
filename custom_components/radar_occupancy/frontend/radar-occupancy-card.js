@@ -268,6 +268,15 @@ class RadarOccupancyCard extends HTMLElement {
       this.pendingSample=null;this.mode='view';this.render();
     }
   }
+  async simulateRoom() {
+    this.busy=true;this.render();
+    try {
+      const result=await this._hass.callWS({type:'call_service',domain:'radar_occupancy',service:'simulate',service_data:{room:this.selected,ignore_restrictions:true},return_response:true});
+      const report=result.response;
+      this.message=(this._hass.language?.startsWith('de')?'Simulation · virtuelle Lichtbefehle: ':'Simulation · virtual light commands: ')+(report.commands.map(c=>`${c.time}s ${c.entity_id}: ${c.service}${c.brightness?' ('+Math.round(c.brightness/2.55)+' %)':''}`).join(' · ')||(this._hass.language?.startsWith('de')?'Keine Lichtbefehle. Lichtzuordnung und Automatik prüfen.':'No light commands. Check light assignment and automation.'));
+    } catch(error) {this.message=error.message||String(error);}
+    finally {this.busy=false;this.render();}
+  }
   async service(name,data={}) {
     this.busy=true;this.render();
     try { await this._hass.callService('radar_occupancy',name,data);this.message=['sample','undo_sample','set_exit','set_door','set_boundary'].includes(name)&&!data.clear?this.t('svc_'+name):this.t('svc_default');return true; }
@@ -302,6 +311,7 @@ class RadarOccupancyCard extends HTMLElement {
       <div class="control-modes" role="group" aria-label="${escapeHtml(this.t('light_control'))}"><button data-control-mode="sensor" aria-pressed="${sensorMode}">${escapeHtml(this.t('mode_distance'))}</button><button data-control-mode="map" aria-pressed="${!sensorMode}">${escapeHtml(this.t('mode_map'))}</button></div>
       <div class="selector-row"><select id="sensor" aria-label="${escapeHtml(this.t('select_room'))}">${sensors.map(s=>`<option value="${escapeHtml(s.id)}" ${s.id===this.selected?'selected':''}>${escapeHtml(s.room)}</option>`).join('')}</select><div class="live-status">${detected.length?`${escapeHtml(this.t('detected'))}: <strong>${escapeHtml(detected.join(', '))}</strong>`:`<span class="muted">${escapeHtml(this.t('no_target'))}</span>`}</div></div>
       <div class="status">${sensors.map(s=>`<div class="room-tile ${s.id===this.selected?'selected':''}"><button class="room-button ${escapeHtml(s.zone)}" data-select-sensor="${escapeHtml(s.id)}" aria-pressed="${s.id===this.selected}"><strong>${escapeHtml(s.room)}</strong><span>${escapeHtml(this.roomStatus(s))}</span></button><button class="hold-button" data-toggle-hold="${escapeHtml(s.id)}" role="switch" aria-label="${escapeHtml(this.t('hold_aria',{room:s.room}))}" aria-checked="${s.hold_enabled!==false}">${escapeHtml(this.t(s.hold_enabled!==false?'hold_on':'hold_off'))}</button></div>`).join('')}</div>
+      <div class="toolbar"><button id="simulate-room" ${!current?.map_ready||this.busy?'disabled':''}>${this._hass.language?.startsWith('de')?'Raum simulieren':'Simulate room'}</button><span class="muted">${this._hass.language?.startsWith('de')?'Virtueller Test · echte Lichter bleiben unverändert':'Virtual test · actual lights stay unchanged'}</span></div>
       ${this.message?`<div class="notice" role="status">${escapeHtml(this.message)}</div>`:''}
     </ha-card>
     <div class="floors">${this.floorOrder(data).map(floor=>this.floor(floor,data)).join('')||`<ha-card><p>${escapeHtml(this.t('no_map'))}</p></ha-card>`}</div>
@@ -315,6 +325,7 @@ class RadarOccupancyCard extends HTMLElement {
     <ha-card><details data-panel="transitions" ${open('transitions')}><summary>${escapeHtml(this.t('transitions'))}<span class="summary-note">${escapeHtml(this.t('fade_summary',{in:data.fade_in,out:data.fade_out}))}</span></summary><div class="section-body"><div class="controls">${['fade_in','fade_out'].map((key,i)=>`<label>${escapeHtml(this.t(key))} · ${escapeHtml(data[key])} s<input aria-label="${escapeHtml(this.t('seconds_aria',{label:this.t(key)}))}" type="range" min="0" max="10" step="0.5" value="${escapeHtml(data[key]??0)}" data-setting="${escapeHtml(data.entities?.[key]||'')}"></label>`).join('')}</div><p class="muted">${escapeHtml(this.t('fade_note'))}</p></div></details></ha-card>
     <ha-card><details class="help" data-panel="help" ${open('help')}><summary>${escapeHtml(this.t('help'))}</summary><div class="section-body">${[1,2,3,4,5,6,7].map(i=>`<p>${escapeHtml(this.t('help'+i))}</p>`).join('')}</div></details></ha-card>`;
     const root=this.shadowRoot;
+    root.getElementById('simulate-room').onclick=()=>this.simulateRoom();
     root.getElementById('tracking').onclick=()=>this.switchEntity(data.entities?.light_automation,!tracking);
     root.querySelectorAll('[data-control-mode]').forEach(button=>button.onclick=()=>this.setControlMode(button.dataset.controlMode==='sensor'));
     this.bindSensorSelect(root.getElementById('sensor'));

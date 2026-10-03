@@ -357,3 +357,25 @@ console.log('Karte registriert sich neben einer alten Positionskarte.');
   assert.deepEqual({...stored},{name:'set_door',room:'s',to:'h',x:500,y:500});
   console.log('Tür markieren geprüft.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
+
+(async()=>{
+  const simulation = new Card();
+  simulation.selected='example-room';
+  simulation.render=()=>{};
+  let request;
+  simulation._hass={language:'de',callWS:async message=>{
+    request=message;
+    return {response:{commands:[{time:1.5,entity_id:'light.example',service:'turn_on',brightness:102}]}};
+  }};
+  await simulation.simulateRoom();
+  assert.equal(request.service,'simulate');
+  assert.equal(request.return_response,true);
+  assert.equal(request.service_data.room,'example-room');
+  assert.ok(simulation.message.includes('40 %'));
+  assert.equal(simulation.busy,false);
+  simulation._hass.callWS=async()=>{throw new Error('Simulation unavailable');};
+  await simulation.simulateRoom();
+  assert.equal(simulation.message,'Simulation unavailable');
+  assert.equal(simulation.busy,false);
+  console.log('Öffentliche Simulation: Antwort, Helligkeitsanzeige und Fehlerbehandlung geprüft.');
+})().catch(error=>{console.error(error);process.exitCode=1;});
