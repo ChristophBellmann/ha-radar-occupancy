@@ -314,15 +314,16 @@ Konfigurationsrepo; es übernimmt nur den Code aus diesem öffentlichen Repo.
 
 ## Simulation / Simulation eines Rundgangs
 
-The position card's **Simulate room** button runs entry and sitting-still
-observations in a virtual copy of your mapped home. It shows intended light
-commands. It requires a calibrated room and loaded map. The default starts
+The position card's **Simulate room** button starts a visible animated person
+in the selected room. **Simulation** lets you draw paths for several people.
+The original instant dry-run action `simulate` still returns intended commands. It requires a calibrated room and loaded map. The default starts
 with virtual lights off and no occupants; actual sensors, lights and held
 occupancy stay unchanged. The card bypasses darkness/time limits in this test.
 
-**Raum simulieren** testet Eintritt und Sitzenbleiben mit deiner lokalen Karte.
-Die Ausgabe zeigt virtuelle Lichtbefehle. Echte Lampen und Belegungen werden
-nicht geändert. Für einen eigenen Weg nutze **Entwicklerwerkzeuge → Aktionen**:
+**Raum simulieren** startet eine sichtbare Animation. Standardmäßig ist sie
+eine Vorschau; für echte Lampen siehe unten. Die ursprüngliche Aktion
+`simulate` bleibt eine sofortige virtuelle Auswertung. Für einen eigenen
+sofortigen Test nutze **Entwicklerwerkzeuge → Aktionen**:
 
 ```yaml
 action: radar_occupancy.simulate
@@ -357,3 +358,66 @@ at 30 waypoints, each 0.5–120 seconds; it runs virtual time immediately.
 It tests decisions and reports fade intentions, not radio coverage, physical
 lamp acknowledgement, real fade timing or cloud/network delays. No private
 map data is shipped in this public repository.
+
+
+### Animated people and real light test / Animierte Personen und Lichttest
+
+On the position card, open **Simulation**. Select a person and **Draw path on
+map**, then tap waypoints along the rooms and doors. Add people to give each
+one an independent route and color. **Wait 10 s** repeats the last position;
+**Lose target · 60 s** creates a radar dropout. Up to eight people run at once.
+Positions interpolate between waypoints at walking speed. All people start
+together; a shorter route stays at its final position until the longest route
+ends. Use dropout after approaching an exit to test leaving; dropout in a room
+keeps a sitting person counted when hold is enabled. Paths do not avoid walls
+automatically: place waypoints along the actual doors and corridor. Observations
+closer than the tracker's resolution may merge, just like real radar targets.
+
+**Echte Lichter steuern** einschalten und **Simulation starten** drücken:
+Die farbigen Personen bewegen sich auf der Karte und steuern die zugeordneten
+Lampen einschließlich Helligkeit, Ein-/Ausblenden und Nachlauf. Die normale
+Radar-Lichtsteuerung pausiert während dieses Tests. Die echten Radarwerte und
+Raumbelegungen laufen weiter; Simulationsbelegungen werden separat angezeigt
+und nicht gespeichert. Der Hauptschalter der Lichtautomatik muss an sein;
+sein Ausschalten stoppt den Lichttest. Der Kartenknopf testet unabhängig von
+Dunkelheit und Zeitfenstern, berücksichtigt aber deaktivierte Raumautomatik.
+
+**Stoppen**, das Ende des längsten Wegs, das Entladen der Integration oder ein
+reguläres Herunterfahren beenden die Sitzung und stellen die zuvor aktiven
+Lichtzustände und Helligkeiten wieder her. Manuelle Lichtänderungen während
+des Tests werden bei der Wiederherstellung berücksichtigt. Geräte, die nicht
+erreichbar sind, werden in der Ansicht gemeldet. Ohne **Echte Lichter steuern**
+bleibt es eine Vorschau mit farbigen Markern und simulierten Belegungen.
+
+```yaml
+action: radar_occupancy.start_simulation
+data:
+  live_lights: true
+  ignore_restrictions: true
+  persons:
+    - id: Person 1
+      route:
+        - room: binary_sensor.example_room_occupancy
+          x: 2000
+          y: 3000
+          seconds: 5
+        - room: binary_sensor.example_hall_occupancy
+          x: 5000
+          y: 1000
+          seconds: 8
+        - seconds: 60
+    - id: Person 2
+      route:
+        - room: binary_sensor.example_room_occupancy
+          x: 3500
+          y: 3000
+          seconds: 60
+```
+
+Stop with `radar_occupancy.stop_simulation`. Coordinates are local map mm;
+use your own geometry. `seconds` is time spent reaching a waypoint from the
+previous point; the first waypoint is a stationary starting position. A repeated
+position creates a pause. Each person is bounded to 30 waypoints, each taking
+0.5–120 seconds. Floor changes use the configured exits and doors; there is no
+interpolation between separate floor maps. These animation actions run in real
+time; the instant `simulate` action runs compressed virtual time.

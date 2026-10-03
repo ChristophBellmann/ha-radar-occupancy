@@ -42,6 +42,7 @@ class OverviewSensor(RadarOccupancyEntity, SensorEntity):
     _attr_native_unit_of_measurement = "people"
     _unrecorded_attributes = frozenset(
         {
+            "simulation",
             "map_mode",
             "light_automation",
             "fade_in",

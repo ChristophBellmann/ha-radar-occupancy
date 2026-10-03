@@ -172,3 +172,23 @@ simulate:
       description: Ignore darkness and time windows in this simulation only.
       selector:
         boolean:
+start_simulation:
+  name: Start animated simulation
+  description: Animate up to eight people on the map. Real light control is optional; restores previous light states when stopped. Real radar inputs and occupancy are unchanged.
+  fields:
+    persons:
+      required: true
+      description: List of people with unique id and route. Each waypoint has room, map x/y in mm and seconds. Positions interpolate between waypoints. Omit room for a radar dropout.
+      selector:
+        object:
+    live_lights:
+      description: Take over mapped lights during the test. Light automation must be enabled. Stop restores the previous light states.
+      selector:
+        boolean:
+    ignore_restrictions:
+      description: Ignore darkness and time windows only for the simulation.
+      selector:
+        boolean:
+stop_simulation:
+  name: Stop animated simulation
+  description: Stop animation and restore light states if real light control was enabled.

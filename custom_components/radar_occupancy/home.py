@@ -157,6 +157,8 @@ class Home:
         self.manager.saved["home"][key] = value
         if key == "light_automation":
             if not value:
+                if self.manager.simulation and self.manager.simulation.live_lights:
+                    self.hass.async_create_task(self.manager.simulation.stop())
                 self.manager.lights.cancel_all()
             else:
                 for st in self.manager.lights.state.values():
@@ -543,6 +545,7 @@ class Home:
         snap = self.tracking.snapshot(now)
         names = self.tracking.name
         return {
+            "simulation": manager.simulation.snapshot() if manager.simulation else manager.simulation_result,
             "map_mode": self.map_mode,
             "light_automation": self.light_automation,
             "fade_in": self.fade_in,

@@ -280,6 +280,54 @@ def _register_services(hass: HomeAssistant) -> None:
         supports_response=SupportsResponse.ONLY,
     )
 
+    async def start_simulation(call: ServiceCall) -> None:
+        from .simulation_session import SimulationSession
+
+        manager = get_manager(hass)
+        if manager.simulation:
+            raise HomeAssistantError("Stop the current simulation before starting another.")
+        session = SimulationSession(
+            manager,
+            call.data["persons"],
+            live_lights=call.data["live_lights"],
+            ignore_restrictions=call.data["ignore_restrictions"],
+        )
+        manager.simulation = session
+        try:
+            await session.start()
+        except Exception:
+            manager.simulation = None
+            raise
+
+    async def stop_simulation(call: ServiceCall) -> None:
+        manager = get_manager(hass)
+        if manager.simulation:
+            await manager.simulation.stop()
+
+    hass.services.async_register(
+        DOMAIN,
+        "start_simulation",
+        start_simulation,
+        schema=vol.Schema(
+            {
+                vol.Required("persons"): vol.All(
+                    [
+                        vol.Schema(
+                            {
+                                vol.Required("id"): vol.All(cv.string, vol.Length(min=1, max=40)),
+                                vol.Required("route"): vol.All([waypoint], vol.Length(min=1, max=30)),
+                            }
+                        )
+                    ],
+                    vol.Length(min=1, max=8),
+                ),
+                vol.Optional("live_lights", default=False): cv.boolean,
+                vol.Optional("ignore_restrictions", default=False): cv.boolean,
+            }
+        ),
+    )
+    hass.services.async_register(DOMAIN, "stop_simulation", stop_simulation, schema=vol.Schema({}))
+
     for name, (handler, schema) in schemas.items():
         hass.services.async_register(DOMAIN, name, handler, schema=schema)
 

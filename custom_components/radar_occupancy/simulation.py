@@ -109,8 +109,8 @@ class ReplayHome:
         return self.now - self.tracking.approaching.get(room, -1e9) <= 2
 
 
-def simulate(manager, route, *, held=False, ignore_restrictions=False):
-    """Replay up to 120 seconds per waypoint, using local map millimetres."""
+def make_sandbox(manager, *, held=False, ignore_restrictions=False):
+    """Create independent occupancy and light decision state."""
     if manager.home is None or not manager.home.tracking.rooms:
         raise HomeAssistantError("Simulation requires a loaded, calibrated home map.")
     sandbox = SimpleNamespace(
@@ -138,32 +138,47 @@ def simulate(manager, route, *, held=False, ignore_restrictions=False):
             else:
                 unavailable.append(entity)
     sandbox.lights.evaluate(sandbox.home.now)
+    return sandbox, unavailable
+
+
+def observation(manager, home, waypoint):
+    if not waypoint.get("room"):
+        return None
+    rid = manager.resolve(waypoint["room"])
+    info = home.tracking.rooms.get(rid)
+    if not info:
+        raise HomeAssistantError("Selected room has no usable map calibration.")
+    if "x" not in waypoint or "y" not in waypoint:
+        raise HomeAssistantError("A room waypoint needs map x and y coordinates in millimetres.")
+    point = [waypoint["x"], waypoint["y"]]
+    transform = manager.home.rooms.get(rid, {}).get("transform")
+    if transform:
+        (a, b, c), (d, e, f) = transform
+        det = a * e - b * d
+        if det:
+            dx, dy = point[0] - c, point[1] - f
+            radar = [1000 * (e * dx - b * dy) / det, 1000 * (-d * dx + a * dy) / det]
+            for aid, area in manager.areas.items():
+                if area.parent and area.parent.entry_id == rid and area.area.contains(*radar):
+                    return (info["floor"], point, aid)
+    return (info["floor"], point)
+
+
+def hold_off(manager):
+    rooms = {rid for rid, target in manager.rooms.items() if not target.room.hold}
+    return rooms | {aid for aid, area in manager.areas.items() if area.parent and area.parent.entry_id in rooms}
+
+
+def simulate(manager, route, *, held=False, ignore_restrictions=False):
+    """Instant dry run, preserved for scripting and regression tests."""
+    sandbox, unavailable = make_sandbox(manager, held=held, ignore_restrictions=ignore_restrictions)
     timeline = []
     for waypoint in route:
-        observations = []
-        if waypoint.get("room"):
-            rid = manager.resolve(waypoint["room"])
-            info = sandbox.home.tracking.rooms.get(rid)
-            if not info:
-                raise HomeAssistantError("Selected room has no usable map calibration.")
-            if "x" not in waypoint or "y" not in waypoint:
-                raise HomeAssistantError("A room waypoint needs map x and y coordinates in millimetres.")
-            point = [waypoint["x"], waypoint["y"]]
-            observations = [(info["floor"], point)]
-            transform = manager.home.rooms.get(rid, {}).get("transform")
-            if transform:
-                (a, b, c), (d, e, f) = transform
-                det = a * e - b * d
-                if det:
-                    dx, dy = point[0] - c, point[1] - f
-                    radar = [1000 * (e * dx - b * dy) / det, 1000 * (-d * dx + a * dy) / det]
-                    for aid, area in manager.areas.items():
-                        if area.parent and area.parent.entry_id == rid and area.area.contains(*radar):
-                            observations = [(info["floor"], point, aid)]
-                            break
+        value = observation(manager, sandbox.home, waypoint)
+        observations = [value] if value else []
         for _ in range(round(waypoint.get("seconds", 3) * 2)):
             sandbox.home.now += 0.5
-            sandbox.home.tracking.step(sandbox.home.now, observations)
+            sandbox.home.tracking.step(sandbox.home.now, observations, hold_off(manager))
             sandbox.lights.evaluate(sandbox.home.now + 0.001)
         timeline.append(
             {

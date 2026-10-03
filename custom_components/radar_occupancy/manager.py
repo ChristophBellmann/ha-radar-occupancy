@@ -273,6 +273,8 @@ class RadarOccupancyManager:
         self._loaded = False
         self._watching: set[str] = set()
         self._ticks = 0
+        self.simulation = None
+        self.simulation_result = {}
 
     @property
     def targets(self) -> list[Target]:
@@ -334,6 +336,8 @@ class RadarOccupancyManager:
             self._unsub_tick = async_track_time_interval(self.hass, self._tick, timedelta(seconds=1))
 
     async def async_remove(self, entry_id: str) -> None:
+        if self.simulation:
+            await self.simulation.stop()
         if entry_id in self.plans:
             self.plans.discard(entry_id)
             if self.home:
@@ -389,7 +393,10 @@ class RadarOccupancyManager:
         new = event.data["new_state"]
         now = dt_util.utcnow().timestamp()
         if entity_id.startswith("light."):
-            self.lights.light_changed(event)
+            if self.simulation and self.simulation.live_lights:
+                self.simulation.light_changed(event)
+            else:
+                self.lights.light_changed(event)
         home = self.home
         if home and entity_id.startswith("camera."):
             if home.maps_outdated():
@@ -427,7 +434,8 @@ class RadarOccupancyManager:
         handovers = handover([r.room for r in rooms], now) if self.home is None or self.home.handover else []
         for released in handovers:
             changed.update(r.entry_id for r in rooms if r.room is released)
-        self.lights.evaluate(now)
+        if not (self.simulation and self.simulation.live_lights):
+            self.lights.evaluate(now)
         for target in self.targets:
             occupied = target.occupied
             target.was_occupied = occupied

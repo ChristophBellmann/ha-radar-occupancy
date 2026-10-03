@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.3
+
+- Animated map simulation with up to eight simultaneous people, individual
+  colors and paths, interpolated positions, waiting and radar dropouts.
+- Draw each person's path directly on the zoomable, rotated floor maps.
+  Simulated occupancy and real radar occupancy are displayed separately.
+- Optional **Control real lights** takes over mapped light control during
+  the session, using the production light controller including fades and
+  run-on time. Stop, end of route, disabling the master or unloading an entry
+  ends the session and restores previous light states. Normal radar tracking
+  continues; simulated counts are never written to real occupancy storage.
+- Actions `start_simulation` and `stop_simulation` for automation/API use.
+  The instant, virtual `simulate` response action remains available.
+
 ## 0.3.2
 
 - Public `radar_occupancy.simulate` response action replays local map waypoints
