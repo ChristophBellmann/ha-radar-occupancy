@@ -7,7 +7,8 @@
         "menu_options": {
           "room": "Raum mit Radarsensor",
           "area": "Teilbereich eines Raums (z. B. Balkon)",
-          "home": "Wohnung (Kartenmodus, Lichtautomatik, Lagebild)"
+          "home": "Wohnung (Kartenmodus, Lichtautomatik, Lagebild)",
+          "plan": "Grundriss als Bild (Karte ohne Saugroboter)"
         }
       },
       "room": {
@@ -41,10 +42,24 @@
         "data": {
           "name": "Name"
         }
+      },
+      "plan": {
+        "title": "Grundriss hinzufügen",
+        "description": "Ein Bild eines Stockwerks als Karte für den Kartenmodus, für Wohnungen ohne unterstützte Saugroboter-Karte. Eine PNG- oder JPEG-Datei in den Ordner www der Konfiguration legen und unten ihren Pfad darin angeben, z. B. grundriss/eg.png. Raumgrenzen und Türen werden danach in der Positionskarte eingezeichnet.",
+        "data": {
+          "name": "Name",
+          "image": "Bilddatei unter www",
+          "image_width": "Echte Breite des ganzen Bildes"
+        },
+        "data_description": {
+          "image": "Pfad im Ordner www, z. B. grundriss/eg.png.",
+          "image_width": "Eine Wand auf dem Plan messen und auf die ganze Bildbreite hochrechnen."
+        }
       }
     },
     "error": {
-      "invalid_box": "„Von“ muss kleiner als „bis“ sein."
+      "invalid_box": "„Von“ muss kleiner als „bis“ sein.",
+      "plan_image": "Das Bild lässt sich nicht lesen. Es muss eine PNG- oder JPEG-Datei im Ordner www der Konfiguration sein."
     },
     "abort": {
       "already_configured": "Die Wohnung ist bereits eingerichtet."
@@ -78,7 +93,7 @@
           "y2_entity": "Y Ziel 2",
           "x3_entity": "X Ziel 3",
           "y3_entity": "Y Ziel 3",
-          "map_camera": "Roboterkarte (Kamera)",
+          "map_camera": "Karte",
           "map_room": "Raum auf der Karte",
           "door_rooms": "Türen zu diesen Kartenräumen",
           "remember_brightness": "Zuletzt von Hand gewählte Helligkeit"
@@ -88,7 +103,7 @@
           "handover": "Nur für Einpersonenhaushalte: Hat dieser Raum sein Ziel verloren und sieht ein anderer teilnehmender Raum jemanden, ist dieser Raum frei.",
           "takeover_min": "Näher liegende Ziele des Sensors dieses Raums ignorieren, z. B. ein festes Echo vom Türblatt.",
           "run_on": "Wartezeit, nachdem der Raum frei wurde.",
-          "map_camera": "Kartenmodus: gespeicherte Karte dieses Stockwerks (dreame_vacuum-Kamera). Eingemessen wird in der Positionskarte.",
+          "map_camera": "Kartenmodus: die Karte dieses Stockwerks, entweder die gespeicherte Karte eines Saugroboters (dreame_vacuum-Kamera) oder ein Grundriss-Eintrag. Eingemessen wird in der Positionskarte.",
           "map_room": "Der Raum der Roboterkarte, der diesem Raum entspricht.",
           "door_rooms": "Kartenräume, die durch eine echte Tür erreichbar sind. Leer: alle angrenzenden. Kartenräume ohne Radar gelten als draußen.",
           "remember_brightness": "Auf die zuletzt von Hand eingestellte Helligkeit einblenden statt auf die feste."
@@ -104,10 +119,22 @@
           "manual_off_reset": "Ein im belegten Raum von Hand ausgeschaltetes Licht bleibt aus, auch nach kurzem Verlassen. 0: nur bis zum nächsten Betreten.",
           "approach_brightness": "Anteil der Zielhelligkeit, während jemand auf den Raum zugeht (Kartenmodus)."
         }
+      },
+      "plan": {
+        "title": "Grundriss",
+        "data": {
+          "image": "Bilddatei unter www",
+          "image_width": "Echte Breite des ganzen Bildes"
+        },
+        "data_description": {
+          "image": "Pfad im Ordner www, z. B. grundriss/eg.png.",
+          "image_width": "Eine Wand auf dem Plan messen und auf die ganze Bildbreite hochrechnen."
+        }
       }
     },
     "error": {
-      "invalid_box": "„Von“ muss kleiner als „bis“ sein."
+      "invalid_box": "„Von“ muss kleiner als „bis“ sein.",
+      "plan_image": "Das Bild lässt sich nicht lesen. Es muss eine PNG- oder JPEG-Datei im Ordner www der Konfiguration sein."
     }
   },
   "entity": {
@@ -222,6 +249,15 @@
     },
     "outline_crossing": {
       "message": "Die Grenze darf sich nicht kreuzen."
+    },
+    "door_point": {
+      "message": "Eine Tür braucht den Raum dahinter und einen Kartenpunkt."
+    },
+    "door_same_room": {
+      "message": "Eine Tür muss in einen anderen Raum oder nach draußen führen."
+    },
+    "plan_image": {
+      "message": "Das Bild lässt sich nicht lesen. Es muss eine PNG- oder JPEG-Datei im Ordner www der Konfiguration sein."
     }
   },
   "services": {
@@ -412,6 +448,32 @@
         "room": {
           "name": "Raum",
           "description": "Raum: Eintrags-ID oder eine beliebige Entität des Raums."
+        }
+      }
+    },
+    "set_door": {
+      "name": "Tür setzen",
+      "description": "Eine Tür von diesem Raum zu einem anderen Raum oder nach draußen, an einem Kartenpunkt. Auf Grundrissen nötig; auf Roboterkarten werden Türen automatisch erkannt.",
+      "fields": {
+        "room": {
+          "name": "Raum",
+          "description": "Raum: Eintrags-ID oder eine beliebige Entität des Raums."
+        },
+        "to": {
+          "name": "Nach",
+          "description": "Der Raum hinter der Tür (Eintrags-ID oder eine seiner Entitäten) oder \"outside\"."
+        },
+        "x": {
+          "name": "X",
+          "description": "Karten-X in mm."
+        },
+        "y": {
+          "name": "Y",
+          "description": "Karten-Y in mm."
+        },
+        "clear": {
+          "name": "Entfernen",
+          "description": "Alle für den Raum gesetzten Türen entfernen."
         }
       }
     }

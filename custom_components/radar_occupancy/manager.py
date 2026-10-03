@@ -36,6 +36,7 @@ from .const import (
     DEFAULTS,
     KIND_AREA,
     KIND_HOME,
+    KIND_PLAN,
     SIGNAL_UPDATE,
     STORAGE_KEY,
     STORAGE_VERSION,
@@ -248,6 +249,7 @@ class RadarOccupancyManager:
         self.rooms: dict[str, RoomTarget] = {}
         self.areas: dict[str, AreaTarget] = {}
         self.home: Home | None = None
+        self.plans: set[str] = set()  # floor plan entries
         self.lights: LightController | None = None
         self._unsub_states = None
         self._unsub_tick = None
@@ -271,6 +273,12 @@ class RadarOccupancyManager:
     async def async_add(self, entry: ConfigEntry) -> Target | Home:
         await self._async_load()
         now = dt_util.utcnow().timestamp()
+        if entry.data.get(CONF_KIND) == KIND_PLAN:
+            # A floor plan has no entities; it is a map source for the home.
+            self.plans.add(entry.entry_id)
+            if self.home:
+                self.home.reload_maps()
+            return None
         if entry.data.get(CONF_KIND) == KIND_HOME:
             self.home = Home(self, entry)
             self._subscribe()
@@ -309,6 +317,11 @@ class RadarOccupancyManager:
             self._unsub_tick = async_track_time_interval(self.hass, self._tick, timedelta(seconds=1))
 
     async def async_remove(self, entry_id: str) -> None:
+        if entry_id in self.plans:
+            self.plans.discard(entry_id)
+            if self.home:
+                self.home.reload_maps()
+            return
         if self.home and self.home.entry_id == entry_id:
             self.home.unload()
             self.home = None
@@ -327,7 +340,7 @@ class RadarOccupancyManager:
     async def async_forget(self, entry_id: str) -> None:
         self.saved.pop(entry_id, None)
         if self.saved.get("map"):
-            for key in ("calibrations", "exits", "people"):
+            for key in ("calibrations", "exits", "doors", "people"):
                 self.saved["map"].get(key, {}).pop(entry_id, None)
         await self.store.async_save(self.saved)
 
@@ -342,7 +355,7 @@ class RadarOccupancyManager:
         ids |= {leaf for light in lights for leaf in self.lights.leaves(light)}
         if self.home:
             ids |= self.home.inputs()
-            ids |= self.home.cameras()
+            ids |= {c for c in self.home.cameras() if c.startswith("camera.")}
         return ids
 
     def _subscribe(self) -> None:

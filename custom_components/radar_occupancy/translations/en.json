@@ -7,7 +7,8 @@
         "menu_options": {
           "room": "Room with a radar sensor",
           "area": "Sub-area of a room (e.g. balcony)",
-          "home": "Home (map mode, light automation, overview)"
+          "home": "Home (map mode, light automation, overview)",
+          "plan": "Floor plan image (map without a robot vacuum)"
         }
       },
       "room": {
@@ -41,10 +42,24 @@
         "data": {
           "name": "Name"
         }
+      },
+      "plan": {
+        "title": "Add floor plan",
+        "description": "An image of one floor as map for map mode, for homes without a supported robot vacuum map. Put a PNG or JPEG file into the www folder of your configuration and give its path below it, e.g. floorplans/ground.png. Room outlines and doors are drawn on the position card afterwards.",
+        "data": {
+          "name": "Name",
+          "image": "Image file below www",
+          "image_width": "Real width of the whole image"
+        },
+        "data_description": {
+          "image": "Path inside the www folder, e.g. floorplans/ground.png.",
+          "image_width": "Measure a wall shown on the plan and scale it to the full image width."
+        }
       }
     },
     "error": {
-      "invalid_box": "\"From\" must be smaller than \"to\"."
+      "invalid_box": "\"From\" must be smaller than \"to\".",
+      "plan_image": "The image cannot be read. It must be a PNG or JPEG file inside the www folder of your configuration."
     },
     "abort": {
       "already_configured": "The home is already set up."
@@ -78,7 +93,7 @@
           "y2_entity": "Y target 2",
           "x3_entity": "X target 3",
           "y3_entity": "Y target 3",
-          "map_camera": "Robot map (camera)",
+          "map_camera": "Map",
           "map_room": "Room on the map",
           "door_rooms": "Doors to these map rooms",
           "remember_brightness": "Last brightness set by hand"
@@ -88,7 +103,7 @@
           "handover": "Single-person household only: when this room lost its target and another taking part room sees someone, this room is free.",
           "takeover_min": "Ignore targets of this room's sensor that are closer, e.g. a fixed echo from a door leaf.",
           "run_on": "Delay after the room became free.",
-          "map_camera": "Map mode: the saved map of this floor (dreame_vacuum camera). Calibrate the sensor on the position card.",
+          "map_camera": "Map mode: the map of this floor, either the saved map of a robot vacuum (dreame_vacuum camera) or a floor plan entry. Calibrate the sensor on the position card.",
           "map_room": "The segment of the robot map that is this room.",
           "door_rooms": "Map rooms reachable through a real door. Empty: every adjacent map room. Map rooms without a radar count as outside.",
           "remember_brightness": "Fade to the brightness last set by hand instead of the fixed brightness."
@@ -104,10 +119,22 @@
           "manual_off_reset": "A light switched off by hand in an occupied room stays off, also after leaving briefly. 0: only until the next entering.",
           "approach_brightness": "Share of the target brightness while someone walks towards the room (map mode)."
         }
+      },
+      "plan": {
+        "title": "Floor plan",
+        "data": {
+          "image": "Image file below www",
+          "image_width": "Real width of the whole image"
+        },
+        "data_description": {
+          "image": "Path inside the www folder, e.g. floorplans/ground.png.",
+          "image_width": "Measure a wall shown on the plan and scale it to the full image width."
+        }
       }
     },
     "error": {
-      "invalid_box": "\"From\" must be smaller than \"to\"."
+      "invalid_box": "\"From\" must be smaller than \"to\".",
+      "plan_image": "The image cannot be read. It must be a PNG or JPEG file inside the www folder of your configuration."
     }
   },
   "entity": {
@@ -222,6 +249,15 @@
     },
     "outline_crossing": {
       "message": "The outline must not cross itself."
+    },
+    "door_point": {
+      "message": "A door needs the room behind it and a map point."
+    },
+    "door_same_room": {
+      "message": "A door must lead to another room or outside."
+    },
+    "plan_image": {
+      "message": "The image cannot be read. It must be a PNG or JPEG file inside the www folder of your configuration."
     }
   },
   "services": {
@@ -412,6 +448,32 @@
         "room": {
           "name": "Room",
           "description": "Room: entry id or any entity of the room."
+        }
+      }
+    },
+    "set_door": {
+      "name": "Set door",
+      "description": "A door from this room to another room or outside, at a map point. Needed on floor plans; on robot maps doors are found automatically.",
+      "fields": {
+        "room": {
+          "name": "Room",
+          "description": "Room: entry id or any entity of the room."
+        },
+        "to": {
+          "name": "To",
+          "description": "The room behind the door (entry id or any entity of it), or \"outside\"."
+        },
+        "x": {
+          "name": "X",
+          "description": "Map X in mm."
+        },
+        "y": {
+          "name": "Y",
+          "description": "Map Y in mm."
+        },
+        "clear": {
+          "name": "Clear",
+          "description": "Remove all doors marked for the room."
         }
       }
     }

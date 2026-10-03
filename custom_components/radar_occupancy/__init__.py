@@ -15,7 +15,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
-from .const import CARD_URL, CONF_KIND, DOMAIN, KIND_AREA, KIND_HOME, MAP_URL
+from .const import CARD_URL, CONF_KIND, DOMAIN, KIND_AREA, KIND_HOME, KIND_PLAN, MAP_URL
 from .manager import RadarOccupancyManager
 
 _LOGGER = logging.getLogger(__name__)
@@ -32,6 +32,8 @@ ROOM = {vol.Required("room"): cv.string}
 
 def _platforms(entry: ConfigEntry) -> list[Platform]:
     kind = entry.data.get(CONF_KIND)
+    if kind == KIND_PLAN:
+        return []
     if kind == KIND_HOME:
         return HOME_PLATFORMS
     return AREA_PLATFORMS if kind == KIND_AREA else ROOM_PLATFORMS
@@ -71,10 +73,11 @@ class MapImageView(HomeAssistantView):
 
     async def get(self, request: web.Request, floor: str) -> web.Response:
         manager: RadarOccupancyManager | None = request.app["hass"].data.get(DOMAIN)
-        content = manager.home.map_image(floor) if manager and manager.home else None
-        if not content:
+        image = manager.home.map_image(floor) if manager and manager.home else None
+        if not image:
             raise web.HTTPNotFound
-        return web.Response(body=content, content_type="image/png", headers={"Cache-Control": "private, max-age=300"})
+        content, content_type = image
+        return web.Response(body=content, content_type=content_type, headers={"Cache-Control": "private, max-age=300"})
 
 
 def _register_services(hass: HomeAssistant) -> None:
@@ -125,6 +128,24 @@ def _register_services(hass: HomeAssistant) -> None:
             home().set_exit(room(call), [call.data["x"], call.data["y"]])
         else:
             raise HomeAssistantError(translation_domain=DOMAIN, translation_key="exit_point")
+
+    async def set_door(call: ServiceCall) -> None:
+        if call.data["clear"]:
+            home().set_door(room(call), None, None)
+            return
+        if "x" not in call.data or "y" not in call.data or "to" not in call.data:
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="door_point")
+        other = call.data["to"]
+        if other != "outside":
+            try:
+                other = hass.data[DOMAIN].resolve(other)
+            except KeyError as err:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="unknown_room",
+                    translation_placeholders={"room": other},
+                ) from err
+        home().set_door(room(call), other, [call.data["x"], call.data["y"]])
 
     async def set_floor(call: ServiceCall) -> None:
         home().set_floor(call.data["camera"], call.data.get("name"), call.data.get("flip"))
@@ -188,6 +209,18 @@ def _register_services(hass: HomeAssistant) -> None:
             vol.Schema(
                 {
                     **ROOM,
+                    vol.Optional("x"): COORD,
+                    vol.Optional("y"): COORD,
+                    vol.Optional("clear", default=False): cv.boolean,
+                }
+            ),
+        ),
+        "set_door": (
+            set_door,
+            vol.Schema(
+                {
+                    **ROOM,
+                    vol.Optional("to"): cv.string,
                     vol.Optional("x"): COORD,
                     vol.Optional("y"): COORD,
                     vol.Optional("clear", default=False): cv.boolean,

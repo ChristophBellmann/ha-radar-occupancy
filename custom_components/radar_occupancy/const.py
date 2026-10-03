@@ -6,6 +6,7 @@ CONF_KIND = "kind"
 KIND_ROOM = "room"
 KIND_AREA = "area"
 KIND_HOME = "home"  # one per installation: map mode, master switch, overview
+KIND_PLAN = "plan"  # a floor plan image as map, for homes without a supported robot map
 
 # Room inputs
 CONF_PRESENCE = "presence_entity"
@@ -18,8 +19,13 @@ CONF_Y2 = "y2_entity"
 CONF_X3 = "x3_entity"
 CONF_Y3 = "y3_entity"
 
+# Floor plan entry
+CONF_IMAGE = "image"  # file below <config>/www, e.g. "floorplans/ground.png"
+CONF_IMAGE_WIDTH = "image_width"  # real width of the whole image in metres
+PLAN_PREFIX = "plan."  # map source value of a floor plan: "plan.<entry id>"
+
 # Map mode, per room
-CONF_MAP_CAMERA = "map_camera"  # dreame_vacuum map camera of the floor
+CONF_MAP_CAMERA = "map_camera"  # map source: dreame_vacuum map camera or "plan.<entry id>"
 CONF_MAP_ROOM = "map_room"  # segment name on that map
 CONF_DOOR_ROOMS = "door_rooms"  # map segments reachable through a real door
 

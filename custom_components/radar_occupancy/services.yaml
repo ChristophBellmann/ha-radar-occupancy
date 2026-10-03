@@ -110,6 +110,30 @@ set_exit:
     clear:
       selector:
         boolean:
+set_door:
+  fields:
+    room: *room
+    to:
+      example: outside
+      selector:
+        text:
+    x:
+      selector:
+        number:
+          min: -100000
+          max: 100000
+          mode: box
+          unit_of_measurement: mm
+    y:
+      selector:
+        number:
+          min: -100000
+          max: 100000
+          mode: box
+          unit_of_measurement: mm
+    clear:
+      selector:
+        boolean:
 set_floor:
   fields:
     camera:

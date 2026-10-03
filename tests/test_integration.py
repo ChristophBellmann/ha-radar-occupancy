@@ -106,7 +106,7 @@ async def advance(hass: HomeAssistant, freezer: FrozenDateTimeFactory, seconds: 
 async def test_config_flow_creates_room_and_area(hass: HomeAssistant) -> None:
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
     assert result["type"] is FlowResultType.MENU
-    assert result["menu_options"] == ["room", "home"]
+    assert result["menu_options"] == ["room", "home", "plan"]
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "room"})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
@@ -118,7 +118,7 @@ async def test_config_flow_creates_room_and_area(hass: HomeAssistant) -> None:
     await hass.async_block_till_done()
 
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
-    assert result["menu_options"] == ["room", "area", "home"]
+    assert result["menu_options"] == ["room", "area", "home", "plan"]
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "area"})
     box = {CONF_X_MIN: 0, CONF_X_MAX: -1, CONF_Y_MIN: 0, CONF_Y_MAX: 1}
     result = await hass.config_entries.flow.async_configure(

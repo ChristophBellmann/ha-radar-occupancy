@@ -19,6 +19,8 @@ from .const import (
     CONF_DOOR_TO,
     CONF_HANDOVER,
     CONF_HANDOVER_ANYWHERE,
+    CONF_IMAGE,
+    CONF_IMAGE_WIDTH,
     CONF_KIND,
     CONF_LIGHT,
     CONF_MANUAL_OFF_RESET,
@@ -47,9 +49,11 @@ from .const import (
     HOME_DEFAULTS,
     KIND_AREA,
     KIND_HOME,
+    KIND_PLAN,
     KIND_ROOM,
+    PLAN_PREFIX,
 )
-from .maps import map_rooms
+from .maps import InvalidImage, map_rooms, read_plan
 
 
 def _mm(maximum: int = 10000, minimum: int = 0, step: int = 50) -> sel.NumberSelector:
@@ -99,15 +103,32 @@ def _names(options: list[str]) -> sel.SelectSelector:
     return sel.SelectSelector(sel.SelectSelectorConfig(options=options, custom_value=True, sort=True))
 
 
+def map_sources(hass) -> list[sel.SelectOptionDict]:
+    """Robot map cameras (they carry room metadata) and floor plan entries."""
+    sources = [
+        sel.SelectOptionDict(value=state.entity_id, label=state.name)
+        for state in hass.states.async_all("camera")
+        if isinstance(state.attributes.get("rooms"), dict)
+    ]
+    sources += [
+        sel.SelectOptionDict(value=PLAN_PREFIX + entry.entry_id, label=entry.title)
+        for entry in hass.config_entries.async_entries(DOMAIN)
+        if entry.data.get(CONF_KIND) == KIND_PLAN
+    ]
+    return sources
+
+
 def room_map(hass, values: dict[str, Any]) -> dict:
-    """Map mode: further targets, robot map and the room on it, real doors."""
+    """Map mode: further targets, map source and the room on it, real doors."""
     segments = map_rooms(hass, values.get(CONF_MAP_CAMERA))
     return {
         _optional(CONF_X2, values): _entity("sensor"),
         _optional(CONF_Y2, values): _entity("sensor"),
         _optional(CONF_X3, values): _entity("sensor"),
         _optional(CONF_Y3, values): _entity("sensor"),
-        _optional(CONF_MAP_CAMERA, values): _entity("camera"),
+        _optional(CONF_MAP_CAMERA, values): sel.SelectSelector(
+            sel.SelectSelectorConfig(options=map_sources(hass), custom_value=True)
+        ),
         _optional(CONF_MAP_ROOM, values): _names(segments),
         vol.Optional(CONF_DOOR_ROOMS, default=list(values.get(CONF_DOOR_ROOMS) or [])): sel.SelectSelector(
             sel.SelectSelectorConfig(options=segments, custom_value=True, multiple=True, sort=True)
@@ -154,6 +175,25 @@ def light_settings(values: dict[str, Any]) -> dict:
     }
 
 
+def plan_schema(values: dict[str, Any]) -> dict:
+    return {
+        vol.Required(CONF_IMAGE, default=values.get(CONF_IMAGE, vol.UNDEFINED)): sel.TextSelector(),
+        vol.Required(CONF_IMAGE_WIDTH, default=values.get(CONF_IMAGE_WIDTH, vol.UNDEFINED)): sel.NumberSelector(
+            sel.NumberSelectorConfig(
+                min=1, max=500, step=0.01, unit_of_measurement="m", mode=sel.NumberSelectorMode.BOX
+            )
+        ),
+    }
+
+
+async def _plan_valid(hass, data: dict[str, Any]) -> bool:
+    try:
+        await hass.async_add_executor_job(read_plan, hass, data[CONF_IMAGE])
+    except InvalidImage:
+        return False
+    return True
+
+
 def _box_valid(data: dict[str, Any]) -> bool:
     return data[CONF_X_MIN] < data[CONF_X_MAX] and data[CONF_Y_MIN] < data[CONF_Y_MAX]
 
@@ -177,7 +217,18 @@ class RadarOccupancyConfigFlow(ConfigFlow, domain=DOMAIN):
         options = ["room", "area"] if self._rooms() else ["room"]
         if not any(e.data.get(CONF_KIND) == KIND_HOME for e in self._async_current_entries()):
             options.append("home")
+        options.append("plan")
         return self.async_show_menu(step_id="user", menu_options=options)
+
+    async def async_step_plan(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            if await _plan_valid(self.hass, user_input):
+                name = user_input.pop(CONF_NAME)
+                return self.async_create_entry(title=name, data={CONF_KIND: KIND_PLAN}, options=user_input)
+            errors[CONF_IMAGE] = "plan_image"
+        schema = vol.Schema({vol.Required(CONF_NAME): sel.TextSelector(), **plan_schema(user_input or {})})
+        return self.async_show_form(step_id="plan", data_schema=schema, errors=errors)
 
     async def async_step_home(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
@@ -233,6 +284,13 @@ class RadarOccupancyOptionsFlow(OptionsFlow):
             if user_input is not None:
                 return self.async_create_entry(data=user_input)
             return self.async_show_form(step_id="home", data_schema=vol.Schema(home_settings(values)))
+        if entry.data.get(CONF_KIND) == KIND_PLAN:
+            if user_input is not None:
+                if await _plan_valid(self.hass, user_input):
+                    return self.async_create_entry(data=user_input)
+                errors[CONF_IMAGE] = "plan_image"
+            schema = vol.Schema(plan_schema(user_input or entry.options))
+            return self.async_show_form(step_id="plan", data_schema=schema, errors=errors)
         if user_input is not None:
             if not is_area or _box_valid(user_input):
                 keep = {CONF_PARENT: entry.options[CONF_PARENT]} if is_area else {}

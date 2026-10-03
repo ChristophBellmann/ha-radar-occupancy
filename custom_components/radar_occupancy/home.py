@@ -126,7 +126,7 @@ class Home:
         self.fade_in: float = settings.get("fade_in", 2.0)
         self.fade_out: float = settings.get("fade_out", 3.0)
         data = manager.saved.setdefault("map", {})
-        for key in ("calibrations", "floors", "exits", "people"):
+        for key in ("calibrations", "floors", "exits", "doors", "people"):
             data.setdefault(key, {})
         self.data = data
         self.floors: dict[str, dict[str, Any]] = {}
@@ -382,7 +382,7 @@ class Home:
                 "id": room_id,
                 "room": room.entry.title,
                 "floor": camera,
-                "map_room": options.get(CONF_MAP_ROOM),
+                "map_room": options.get(CONF_MAP_ROOM) or (room.entry.title if floor and floor.get("plan") else None),
                 "zone": zone,
                 "available": available,
                 "calibrated": bool(transform),
@@ -407,6 +407,7 @@ class Home:
                 "approach_polygons": approach,
                 "approach_source": "manual" if manual_approach else "map" if approach else None,
                 "exits": self.data["exits"].get(room_id, []),
+                "doors": [dict(d) for d in self.data["doors"].get(room_id, [])],
                 "targets": targets,
                 "sub_areas": [{"id": aid, "name": a.entry.title} for aid, a in sub_areas],
             }
@@ -444,6 +445,13 @@ class Home:
             for rid, points in self.data["exits"].items():
                 if manager.rooms.get(rid) and manager.rooms[rid].entry.options.get(CONF_MAP_CAMERA) == camera:
                     candidates.extend((rid, OUTSIDE, [round(v) for v in p], True) for p in points)
+            # Doors marked by hand, e.g. on a floor plan that has no room cells.
+            for rid, marked in self.data["doors"].items():
+                if manager.rooms.get(rid) and manager.rooms[rid].entry.options.get(CONF_MAP_CAMERA) == camera:
+                    for door in marked:
+                        other = door["to"] if door["to"] == OUTSIDE or door["to"] in manager.rooms else None
+                        if other is not None:
+                            candidates.append((rid, other, [round(v) for v in door["point"]], other == OUTSIDE))
             for a, b, point, exit_ in candidates:
                 if any(side != OUTSIDE and side not in rooms for side in (a, b)):
                     continue
@@ -500,14 +508,18 @@ class Home:
         for camera in self.cameras():
             info = self.floors.get(camera)
             settings = self.data["floors"].get(camera, {})
-            base = {"camera": camera, "name": settings.get("name"), "flip": bool(settings.get("flip"))}
+            base = {
+                "camera": camera,
+                "name": settings.get("name") or (info or {}).get("name"),
+                "flip": bool(settings.get("flip")),
+            }
             if info is None:
                 floors[camera] = {**base, "error": self.errors.get(camera, "loading")}
                 continue
             floors[camera] = {
                 **base,
                 **{k: info[k] for k in ("map_id", "width", "height", "calibration_points", "image_path")},
-                "rooms": [{k: r[k] for k in ("name", "x", "y")} for r in info["rooms"]],
+                "rooms": [{k: r[k] for k in ("name", "x", "y")} for r in info["rooms"]] or self._plan_labels(camera),
             }
         sensors = []
         for room_id, info in self.rooms.items():
@@ -548,6 +560,15 @@ class Home:
             "events": snap["events"],
             "lights": lights.snapshot(),
         }
+
+    def _plan_labels(self, camera: str) -> list[dict[str, Any]]:
+        """Room labels on a floor plan: centres of the drawn outlines."""
+        labels = []
+        for info in self.rooms.values():
+            if info["floor"] == camera and info["polygon"]:
+                x, y = centroid(info["polygon"])
+                labels.append({"name": info["map_room"] or info["room"], "x": x, "y": y})
+        return labels
 
     def total_people(self) -> int:
         return sum(self.tracking.count(rid) for rid in self.ready)
@@ -694,6 +715,21 @@ class Home:
         self.manager.save()
         self.update()
 
+    def set_door(self, room_id: str, other: str | None, point: list[float] | None) -> None:
+        """Mark a door from this room to `other` (a room or OUTSIDE); None clears all."""
+        if point is None:
+            self.data["doors"].pop(room_id, None)
+        else:
+            self._floor_of(room_id)
+            if other == room_id:
+                raise HomeAssistantError(translation_domain=const.DOMAIN, translation_key="door_same_room")
+            self.data["doors"].setdefault(room_id, []).append(
+                {"to": other, "point": [round(point[0]), round(point[1])]}
+            )
+        self.manager.save()
+        self.update()
+        self.manager.evaluate()
+
     def set_floor(self, camera: str, name: str | None, flip: bool | None) -> None:
         settings = self.data["floors"].setdefault(camera, {})
         if name is not None:
@@ -703,8 +739,8 @@ class Home:
         self.manager.save()
         self.publish()
 
-    def map_image(self, key: str) -> bytes | None:
+    def map_image(self, key: str) -> tuple[bytes, str] | None:
         for camera, floor in self.floors.items():
-            if floor_key(camera) == key:
-                return floor.get("image")
+            if floor_key(camera) == key and floor.get("image"):
+                return floor["image"], floor.get("content_type", "image/png")
         return None
