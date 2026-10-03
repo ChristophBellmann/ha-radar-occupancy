@@ -5,6 +5,21 @@ similar) that **does not switch the light off on people who sit still**.
 
 [Deutsch weiter unten](#deutsch)
 
+![Position card on a floor plan: people per room, doors, the selected sensor's field of view](docs/images/position-card.png)
+
+## Quick start
+
+1. Install through HACS (below) and restart Home Assistant.
+2. *Settings → Devices & services → Add integration → Radar Occupancy →
+   Room*. Choose the radar device of the room; its sensors are suggested.
+   Pick the light of the room.
+3. Walk out through the door once, then press **Learn door from last exit**
+   on the room's device page. Done: the room now stays occupied while you sit
+   still and frees when you leave.
+4. Optional, for counting people with several persons at home: add *Home*
+   and a *Floor plan* (or use a robot vacuum map) and calibrate the sensors
+   on the position card, see [Map mode](#map-mode-optional-people-counted-through-doors).
+
 ## The problem
 
 Radar presence sensors lose people who sit or lie still. An automation that
@@ -40,7 +55,10 @@ Manually: copy `custom_components/radar_occupancy` into your `config/custom_comp
 
 ## Setup
 
-*Settings → Devices & services → Add integration → Radar Occupancy → Room*:
+*Settings → Devices & services → Add integration → Radar Occupancy → Room*.
+Choose the **radar device**: its sensors are suggested in the next step
+(entities named like *target 1 x*, *Ziel 1 Entfernung* etc.), and the room
+name defaults to the device's area. Check the suggestions:
 
 - **Presence**: the radar's presence binary sensor.
 - **Distance of target 1** (recommended): needed for the door range, e.g. the
@@ -71,7 +89,9 @@ only from this distance* ignores fixed echoes close to a sensor, such as a door
 leaf.
 
 With visitors, a room can be released while someone is still in it. Leave
-handover off unless one person lives in the home.
+handover off unless one person lives in the home, or switch
+`switch.<home>_handover_between_rooms` off while guests are here (needs the
+*Home* entry).
 
 ## Light control
 
@@ -105,6 +125,7 @@ Add *Home* once (*Add integration → Radar Occupancy → Home*). It brings
 | --- | --- |
 | `switch.<home>_light_automation` | Master switch for all lights |
 | `switch.<home>_map_mode` | Off: every room uses its distance rule |
+| `switch.<home>_handover_between_rooms` | Off while guests are here: no handover in the distance rule |
 | `number.<home>_fade_in`, `number.<home>_fade_out` | Fade times, 0 = switch |
 | `sensor.<home>_overview` | People in the home; attributes feed the position card |
 
@@ -226,6 +247,11 @@ griff, oder jemand hat **freigegeben**. Verschwindet das Ziel woanders, etwa am
 Schreibtisch, bleibt der Raum belegt. **Teilbereiche** (z. B. ein Balkon, den
 der Raumsensor mit sieht) zählen nie als Verlassen und können ein eigenes
 Licht schalten.
+
+**Einrichten:** Raum hinzufügen und das Radar-Gerät wählen; Anwesenheit,
+Entfernung und X/Y werden vorgeschlagen, der Name kommt aus dem Bereich des
+Geräts. Bei Besuch den Schalter **Übergabe zwischen Räumen** der Wohnung
+ausschalten.
 
 **Türbereich einmessen:** normal durch die Tür hinausgehen, danach
 **Türbereich vom letzten Verlassen lernen** drücken. Der Bereich beginnt dann

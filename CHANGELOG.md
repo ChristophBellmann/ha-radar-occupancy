@@ -10,6 +10,10 @@
 - Position card in English and German, following the Home Assistant language.
 - Calibration errors are translated (English, German).
 - Diagnostics download for every entry.
+- Room setup from the radar device: presence, distance and X/Y of all
+  targets are suggested, the name from the device's area.
+- Home switch *Handover between rooms*, to pause handover while guests are
+  here.
 - **Breaking** for automations that read the `reason` attribute in map mode: it
   is now a stable code (`moved`, `came_in`, `went_out`, `seen_in_room`,
   `appeared_at_door`, `released`, `hold_off`) with the rooms in `reason_from`
