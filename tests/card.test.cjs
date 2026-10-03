@@ -24,6 +24,11 @@ assert.equal(definitions, 1, 'Mehrfaches Laden darf keine doppelte Registrierung
 const Card = registry.get('radar-occupancy-card');
 assert.equal(context.window.customCards.length, 1);
 const card = new Card();
+const orderedCard = new Card();
+orderedCard.setConfig({floor_order:['upper','missing','upper']});
+assert.deepEqual(Array.from(orderedCard.floorOrder({floors:{lower:{},upper:{},extra:{}}})),['upper','lower','extra']);
+orderedCard.setConfig({});
+assert.deepEqual(Array.from(orderedCard.floorOrder({floors:{lower:{},upper:{}}})),['lower','upper']);
 card._hass = { language: 'de', states: { 'camera.test': { attributes: { entity_picture: '/api/camera_proxy/camera.test' } } } };
 card.images.oben={url:'/api/camera_proxy/camera.test'};
 card.images.unten={url:'/api/camera_proxy/camera.test'};

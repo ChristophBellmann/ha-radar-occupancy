@@ -49,6 +49,11 @@ class RadarOccupancyCard extends HTMLElement {
     return found;
   }
   data() { return this.stateObj()?.attributes; }
+  floorOrder(data) {
+    const available=Object.keys(data.floors||{});
+    const preferred=Array.isArray(this.config?.floor_order)?this.config.floor_order:[];
+    return [...new Set([...preferred.filter(floor=>available.includes(floor)),...available])];
+  }
   view(floor) { return this.viewports[floor]||(this.viewports[floor]={scale:1,x:0,y:0}); }
   set hass(hass) {
     this._hass=hass;
@@ -299,7 +304,7 @@ class RadarOccupancyCard extends HTMLElement {
       <div class="status">${sensors.map(s=>`<div class="room-tile ${s.id===this.selected?'selected':''}"><button class="room-button ${escapeHtml(s.zone)}" data-select-sensor="${escapeHtml(s.id)}" aria-pressed="${s.id===this.selected}"><strong>${escapeHtml(s.room)}</strong><span>${escapeHtml(this.roomStatus(s))}</span></button><button class="hold-button" data-toggle-hold="${escapeHtml(s.id)}" role="switch" aria-label="${escapeHtml(this.t('hold_aria',{room:s.room}))}" aria-checked="${s.hold_enabled!==false}">${escapeHtml(this.t(s.hold_enabled!==false?'hold_on':'hold_off'))}</button></div>`).join('')}</div>
       ${this.message?`<div class="notice" role="status">${escapeHtml(this.message)}</div>`:''}
     </ha-card>
-    <div class="floors">${Object.keys(data.floors||{}).map(floor=>this.floor(floor,data)).join('')||`<ha-card><p>${escapeHtml(this.t('no_map'))}</p></ha-card>`}</div>
+    <div class="floors">${this.floorOrder(data).map(floor=>this.floor(floor,data)).join('')||`<ha-card><p>${escapeHtml(this.t('no_map'))}</p></ha-card>`}</div>
     <div class="legend muted"><span><i class="dot"></i>${escapeHtml(this.t('legend_target'))}</span><span><i class="door-key"></i>${escapeHtml(this.t('legend_approach'))}</span><span><i class="dot" style="background:white;border:2px solid #b76c13"></i>${escapeHtml(this.t('legend_door'))}</span><span><i class="door-key" style="border-color:#7a3fc4;background:#7a3fc420"></i>${escapeHtml(this.t('legend_fov'))}</span></div>
     <ha-card><details data-panel="calibration" ${open('calibration')}><summary>${escapeHtml(this.t('calibration'))}<span class="summary-note">${escapeHtml(current?.room||'')}${current?.calibrated?' · '+escapeHtml(this.t('ready')):''}</span></summary><div class="section-body">
       ${this.setupSummary(current)}

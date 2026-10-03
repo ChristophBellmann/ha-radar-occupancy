@@ -180,6 +180,10 @@ The **position card** (`type: custom:radar-occupancy-card`) is loaded
 automatically; add it to any dashboard. Its texts follow your Home Assistant
 language (English or German). For every sensor:
 
+Set `floor_order` on the card to keep floors in a chosen order, for example
+`floor_order: [camera.upper_map, camera.lower_map]`. Use the map-source IDs;
+other available floors follow afterwards. The order stays stable after restarts.
+
 1. **Place sensor** at its mounting point, then **Orient sensor**: turn the
    field of view until your dot appears where you stand. Ceiling sensors
    instead take three or more **calibration points**.
