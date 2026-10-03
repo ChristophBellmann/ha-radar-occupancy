@@ -1,0 +1,97 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Radar Occupancy",
+        "menu_options": {
+          "room": "Room with a radar sensor",
+          "area": "Sub-area of a room (e.g. balcony)"
+        }
+      },
+      "room": {
+        "title": "Add room",
+        "description": "Choose the radar sensor of this room. Distance and X/Y of the first target are optional but needed for the door range and sub-areas.",
+        "data": {
+          "name": "Name",
+          "presence_entity": "Presence",
+          "distance_entity": "Distance of target 1",
+          "x_entity": "X of target 1",
+          "y_entity": "Y of target 1",
+          "light_entity": "Light"
+        }
+      },
+      "area": {
+        "title": "Add sub-area",
+        "description": "A rectangle in the radar coordinates of the room sensor. Disappearing here never counts as leaving the room.",
+        "data": {
+          "name": "Name",
+          "parent": "Room",
+          "x_min": "X from",
+          "x_max": "X to",
+          "y_min": "Y from",
+          "y_max": "Y to",
+          "light_entity": "Light"
+        }
+      }
+    },
+    "error": {
+      "invalid_box": "\"From\" must be smaller than \"to\"."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Settings",
+        "data": {
+          "presence_entity": "Presence",
+          "distance_entity": "Distance of target 1",
+          "x_entity": "X of target 1",
+          "y_entity": "Y of target 1",
+          "door_from": "Door range from",
+          "door_to": "Door range to (0 = no limit)",
+          "safety_timeout": "Release after no presence for (0 = never)",
+          "handover": "Take part in handover",
+          "handover_anywhere": "Hand over even when lost away from the door",
+          "takeover_min": "Take over only from this distance",
+          "x_min": "X from",
+          "x_max": "X to",
+          "y_min": "Y from",
+          "y_max": "Y to",
+          "light_entity": "Light",
+          "brightness": "Brightness",
+          "run_on": "Switch off after",
+          "window_start": "Time window from",
+          "window_end": "Time window to (same as start = always)"
+        },
+        "data_description": {
+          "door_from": "The room is left only if the target disappears in this distance range. 0 to 0 means every disappearance counts as leaving.",
+          "handover": "Single-person household only: when this room lost its target and another taking part room sees someone, this room is free.",
+          "takeover_min": "Ignore targets of this room's sensor that are closer, e.g. a fixed echo from a door leaf.",
+          "run_on": "Delay after the room became free."
+        }
+      }
+    },
+    "error": {
+      "invalid_box": "\"From\" must be smaller than \"to\"."
+    }
+  },
+  "entity": {
+    "button": {
+      "release": { "name": "Release" },
+      "learn_door": { "name": "Learn door from last exit" }
+    },
+    "sensor": {
+      "last_distance": { "name": "Last seen distance" }
+    },
+    "switch": {
+      "auto_light": { "name": "Automatic light" },
+      "only_dark": { "name": "Only when dark" },
+      "hold": { "name": "Hold occupancy" }
+    }
+  },
+  "exceptions": {
+    "target_present": { "message": "A target is present; only a held occupancy can be released." },
+    "leave_first": { "message": "Walk out through the door first, then press." },
+    "no_distance": { "message": "No distance seen yet; a distance entity is required." }
+  }
+}

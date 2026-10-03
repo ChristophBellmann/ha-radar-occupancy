@@ -1,0 +1,16 @@
+{
+  "entity": {
+    "button": {
+      "release": { "default": "mdi:account-arrow-right" },
+      "learn_door": { "default": "mdi:door-open" }
+    },
+    "sensor": {
+      "last_distance": { "default": "mdi:map-marker-distance" }
+    },
+    "switch": {
+      "auto_light": { "default": "mdi:lightbulb-auto" },
+      "only_dark": { "default": "mdi:weather-night" },
+      "hold": { "default": "mdi:account-lock" }
+    }
+  }
+}

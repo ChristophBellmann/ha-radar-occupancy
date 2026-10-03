@@ -1,0 +1,13 @@
+{
+  "domain": "radar_occupancy",
+  "name": "Radar Occupancy",
+  "codeowners": ["@ChristophBellmann"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/ChristophBellmann/ha-radar-occupancy",
+  "integration_type": "helper",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/ChristophBellmann/ha-radar-occupancy/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

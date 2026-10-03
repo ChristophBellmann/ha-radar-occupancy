@@ -1,0 +1,97 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Radar-Raumbelegung",
+        "menu_options": {
+          "room": "Raum mit Radarsensor",
+          "area": "Teilbereich eines Raums (z. B. Balkon)"
+        }
+      },
+      "room": {
+        "title": "Raum hinzufügen",
+        "description": "Radarsensor dieses Raums wählen. Entfernung und X/Y des ersten Ziels sind optional, werden aber für den Türbereich und Teilbereiche gebraucht.",
+        "data": {
+          "name": "Name",
+          "presence_entity": "Anwesenheit",
+          "distance_entity": "Entfernung Ziel 1",
+          "x_entity": "X Ziel 1",
+          "y_entity": "Y Ziel 1",
+          "light_entity": "Licht"
+        }
+      },
+      "area": {
+        "title": "Teilbereich hinzufügen",
+        "description": "Ein Rechteck in den Radarkoordinaten des Raumsensors. Verschwinden hier gilt nie als Verlassen des Raums.",
+        "data": {
+          "name": "Name",
+          "parent": "Raum",
+          "x_min": "X von",
+          "x_max": "X bis",
+          "y_min": "Y von",
+          "y_max": "Y bis",
+          "light_entity": "Licht"
+        }
+      }
+    },
+    "error": {
+      "invalid_box": "„Von“ muss kleiner als „bis“ sein."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Einstellungen",
+        "data": {
+          "presence_entity": "Anwesenheit",
+          "distance_entity": "Entfernung Ziel 1",
+          "x_entity": "X Ziel 1",
+          "y_entity": "Y Ziel 1",
+          "door_from": "Türbereich ab",
+          "door_to": "Türbereich bis (0 = ohne Grenze)",
+          "safety_timeout": "Freigeben nach so langer Abwesenheit (0 = nie)",
+          "handover": "An der Übergabe teilnehmen",
+          "handover_anywhere": "Auch abgeben, wenn das Ziel nicht an der Tür verschwand",
+          "takeover_min": "Übernehmen erst ab dieser Entfernung",
+          "x_min": "X von",
+          "x_max": "X bis",
+          "y_min": "Y von",
+          "y_max": "Y bis",
+          "light_entity": "Licht",
+          "brightness": "Helligkeit",
+          "run_on": "Ausschalten nach",
+          "window_start": "Zeitfenster von",
+          "window_end": "Zeitfenster bis (gleich wie von = immer)"
+        },
+        "data_description": {
+          "door_from": "Der Raum gilt nur als verlassen, wenn das Ziel in diesem Entfernungsbereich verschwindet. 0 bis 0 heißt: jedes Verschwinden zählt als Verlassen.",
+          "handover": "Nur für Einpersonenhaushalte: Hat dieser Raum sein Ziel verloren und sieht ein anderer teilnehmender Raum jemanden, ist dieser Raum frei.",
+          "takeover_min": "Näher liegende Ziele des Sensors dieses Raums ignorieren, z. B. ein festes Echo vom Türblatt.",
+          "run_on": "Wartezeit, nachdem der Raum frei wurde."
+        }
+      }
+    },
+    "error": {
+      "invalid_box": "„Von“ muss kleiner als „bis“ sein."
+    }
+  },
+  "entity": {
+    "button": {
+      "release": { "name": "Freigeben" },
+      "learn_door": { "name": "Türbereich vom letzten Verlassen lernen" }
+    },
+    "sensor": {
+      "last_distance": { "name": "Zuletzt gesehen in" }
+    },
+    "switch": {
+      "auto_light": { "name": "Licht automatisch" },
+      "only_dark": { "name": "Nur bei Dunkelheit" },
+      "hold": { "name": "Belegung halten" }
+    }
+  },
+  "exceptions": {
+    "target_present": { "message": "Ein Ziel ist sichtbar; nur eine gehaltene Belegung lässt sich freigeben." },
+    "leave_first": { "message": "Zuerst durch die Tür hinausgehen, dann drücken." },
+    "no_distance": { "message": "Noch keine Entfernung gesehen; dafür ist eine Entfernungs-Entität nötig." }
+  }
+}
