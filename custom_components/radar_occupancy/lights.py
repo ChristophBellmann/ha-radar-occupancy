@@ -180,7 +180,18 @@ class LightController:
                 st.occupied = occupied
                 st.empty_since = None if occupied else now
                 continue
-            if occupied and not st.occupied:
+            # A restored/held count can already be positive when someone is
+            # first seen again. That is still a valid light trigger. Counts
+            # alone do not trigger, manual-off stays respected, and recent
+            # commands are allowed to finish before retrying an off light.
+            observed_entry = (
+                occupied
+                and st.mode == AUTO
+                and self.is_off(light)
+                and now - self.last_command.get(light, -1e9) >= const.OWN_ECHO
+                and any(t.observed(now) and self.allowed(t) for t in occupied_targets)
+            )
+            if occupied and (not st.occupied or observed_entry):
                 st.empty_since = None
                 if st.mode == MANUAL_OFF and not self.manual_off_reset():
                     st.mode, changed = AUTO, True  # without a home entry: ends with the next entering

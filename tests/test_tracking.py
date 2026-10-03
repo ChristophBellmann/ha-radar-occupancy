@@ -110,6 +110,30 @@ class PresenceTests(unittest.TestCase):
         self.idle(30)
         self.assertEqual(self.p.count("Schlafzimmer"), 1)
 
+    def test_near_door_dropout_does_not_add_people(self):
+        for _ in range(5):
+            self.run_path([[3700, 1000]] * 4)
+            self.idle(4)
+            self.assertEqual(self.p.count("Schlafzimmer"), 1)
+        self.run_path(self.walk([3700, 1000], [5500, 1000], 6))
+        self.assertEqual(self.p.count("Schlafzimmer"), 0)
+        self.assertEqual(self.p.count("Gang"), 1)
+
+    def test_repeated_trip_through_unseen_hall_conserves_people(self):
+        self.p.configure(ROOMS, doors(gang_covered=False))
+        self.run_path([[2000, 1000]] * 4)
+        for _ in range(5):
+            self.run_path(self.walk([2000, 1000], [3700, 1000], 6))
+            self.idle(5)
+            self.run_path([[8500, 1000]] * 4 + self.walk([8500, 1000], [9500, 1000], 4))
+            self.assertEqual(self.p.count("Gang"), 0)
+            self.assertEqual(self.p.count("Bad"), 1)
+            self.run_path(self.walk([9500, 1000], [8300, 1000], 6))
+            self.idle(5)
+            self.run_path([[3500, 1000]] * 4 + self.walk([3500, 1000], [2000, 1000], 4))
+            self.assertEqual(self.p.count("Gang"), 0)
+            self.assertEqual(self.p.count("Schlafzimmer"), 1)
+
     def test_seen_through_wall_does_not_change_room(self):
         # Tür ganz unten; das Ziel springt an der Wand rechnerisch in den Gang.
         self.p.configure(ROOMS, [Door("Schlafzimmer", "Gang", "oben", [4000, 100])])

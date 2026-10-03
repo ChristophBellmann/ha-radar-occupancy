@@ -31,6 +31,7 @@ DOOR_LEAVE = 800  # mm: vanishing "at the door" (stricter: it switches lights of
 DOOR_APPROACH = 300  # mm: a target must have come this much closer to the door
 APPROACH_ZONE = 1500  # mm: pre-light when a target walks this close towards a door
 PAIR_WINDOW = 8.0  # s: vanishing at a door and appearing on the other side
+REACQUIRE_WINDOW = 15.0  # s: a nearby reappearance after radar dropout is not a new entrant
 UNSEEN_PASS = 2.0  # s: door into an area no sensor sees
 CONFIRM_ONE = 1.0  # s: first target in an empty room
 CONFIRM_MORE = 3.0  # s: each further target visible at the same time
@@ -93,6 +94,7 @@ class Presence:
         self.counts = dict(counts or {})
         self.tracks = []
         self.deaths = []  # open departures at doors whose other side a sensor sees
+        self.lost = []  # counted tracks that vanished without evidence of leaving
         self.events = []
         self.reasons = {}  # room -> {"code": ..., "from": room key, "to": room key}
         self.approaching = {}  # room -> time of the last approach to its door
@@ -160,6 +162,7 @@ class Presence:
             if track.room == room:
                 track.counted = False
         self.deaths = [d for d in self.deaths if d["room"] != room]
+        self.lost = [d for d in self.lost if d["room"] != room]
 
     def visible(self, room, now):
         """How many people are certainly visible at the same time?"""
@@ -179,6 +182,7 @@ class Presence:
         """observations: list of (floor, point[, room]); room forces the
         assignment (sub-areas). hold: rooms whose occupancy is not held."""
         merged = self._merge(observations)
+        self.lost = [d for d in self.lost if now - d["time"] <= REACQUIRE_WINDOW]
         alive = [t for t in self.tracks if now - t.seen <= TRACK_TTL]
         pairs = sorted(
             (
@@ -199,7 +203,9 @@ class Presence:
         for j, obs in enumerate(merged):
             if j not in used_obs:
                 room = obs[2] if len(obs) > 2 and obs[2] else self.room_at(obs[0], obs[1])
-                self.tracks.append(Track(obs[0], obs[1], room, now))
+                track = Track(obs[0], obs[1], room, now)
+                self._reacquire(track)
+                self.tracks.append(track)
         for track in list(self.tracks):
             if now - track.seen > TRACK_TTL:
                 self.tracks.remove(track)
@@ -281,8 +287,28 @@ class Presence:
                 best = (door, d)
         return best[0] if best else None
 
+    def _reacquire(self, track):
+        lost = next(
+            (
+                item
+                for item in self.lost
+                if item["room"] == track.room
+                and item["floor"] == track.floor
+                and math.dist(item["point"], track.birth_point) <= MERGE
+                and self.count(track.room) > 0
+            ),
+            None,
+        )
+        if lost:
+            self.lost.remove(lost)
+            track.counted = True
+            return True
+        return False
+
     def _born(self, track, now):
         track.counted = True
+        if self._reacquire(track):
+            return
         door = self._door_near(track, now, False)
         if door is None:
             # Appeared in the middle of the room: someone who was there, sitting still.
@@ -297,6 +323,11 @@ class Presence:
             self.transfer(other, track.room, now)
         elif other == OUTSIDE:
             self._change(track.room, +1, CAME_IN, now, OUTSIDE, track.room)
+        elif self.count(other) and not door.covered_into(other):
+            # A sensor cannot see departure from the other side (e.g. the
+            # long corridor). Arrival here completes that unseen passage;
+            # move its held person instead of adding another on every trip.
+            self.transfer(other, track.room, now)
         else:
             # Nobody was seen leaving on the other side: count here, take nothing off there.
             self._change(track.room, +1, APPEARED_AT_DOOR, now, other, track.room)
@@ -306,6 +337,7 @@ class Presence:
             return
         door = self._door_near(track, now, True)
         if door is None:
+            self.lost.append({"room": track.room, "floor": track.floor, "point": track.point, "time": track.seen})
             return
         other = door.other(track.room)
         if other == OUTSIDE:

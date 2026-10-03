@@ -105,6 +105,12 @@ class Target:
     def engine_occupied(self) -> bool:
         raise NotImplementedError
 
+    def observed(self, now: float) -> bool:
+        """A confirmed live target, distinct from a held or restored count."""
+        if self.on_map:
+            return self.manager.home.tracking.visible(self.entry_id, now) > 0
+        return False
+
     @property
     def people(self) -> int | None:
         return self.manager.home.people(self.entry_id) if self.on_map else None
@@ -150,6 +156,9 @@ class RoomTarget(Target):
     @property
     def engine_occupied(self) -> bool:
         return self.room.occupied
+
+    def observed(self, now: float) -> bool:
+        return super().observed(now) if self.on_map else self.room.presence is True
 
     @property
     def reason(self) -> str:
@@ -229,6 +238,14 @@ class AreaTarget(Target):
     def engine_occupied(self) -> bool:
         parent = self.parent
         return bool(parent and parent.room.area_occupied(self.area))
+
+    def observed(self, now: float) -> bool:
+        if self.on_map:
+            return super().observed(now)
+        parent = self.parent
+        return bool(
+            parent and parent.room.presence is True and self.area.contains(parent.room.last_x, parent.room.last_y)
+        )
 
     @property
     def reason(self) -> str | None:

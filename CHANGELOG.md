@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.1
+
+- A confirmed live target can switch on an automatic light in a room whose
+  occupancy was already held or restored. Held counts alone still do not
+  switch lights on; manual-off, darkness and time windows remain respected.
+- Arrival from a corridor whose doorway a sensor cannot see consumes that
+  corridor's held occupant instead of adding another person on each trip.
+- A nearby reappearance after a brief radar dropout reuses the held person,
+  including when the target resumes walking before its first confirmation.
+- Position cards accept `floor_order` to keep floor maps in a chosen order.
+
 ## 0.3.0
 
 - **Floor plans**: a PNG or JPEG of a floor (below `www`) plus its real width

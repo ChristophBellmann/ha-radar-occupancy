@@ -291,6 +291,37 @@ async def test_map_mode_off_uses_distance_rule(hass: HomeAssistant, flat: Flat, 
     assert not flat.occupied("bed")  # default door range: every loss is leaving
 
 
+async def test_fresh_sighting_lights_a_restored_occupied_room(hass: HomeAssistant, flat: Flat, monkeypatch) -> None:
+    mock_lights(hass)
+    for light in ("light.bed", "light.bath"):
+        hass.states.async_set(light, "off", {"supported_color_modes": ["brightness"]})
+    await flat.setup(monkeypatch, lights={"bed": "light.bed", "bath": "light.bath"})
+    manager = hass.data[DOMAIN]
+    manager.home.set_setting("light_automation", False)
+    for key in ("bed", "bath"):
+        manager.home.tracking.counts[flat.entries[key].entry_id] = 1
+    manager.home.set_setting("light_automation", True)
+    await flat.idle(2)
+    assert hass.states.get("light.bed").state == "off"
+    assert hass.states.get("light.bath").state == "off"
+    await flat.walk([[1000, 3000]] * 4)
+    assert hass.states.get("light.bed").state == "on"
+    assert hass.states.get("light.bath").state == "off", "Held counts alone must not switch a light on."
+
+
+async def test_daylight_release_lights_a_visible_occupied_room(hass: HomeAssistant, flat: Flat, monkeypatch) -> None:
+    mock_lights(hass)
+    hass.states.async_set("light.bed", "off", {"supported_color_modes": ["brightness"]})
+    await flat.setup(monkeypatch, lights={"bed": "light.bed"})
+    hass.states.async_set("sun.sun", "above_horizon")
+    await flat.walk([[1000, 3000]] * 4)
+    assert flat.occupied("bed")
+    assert hass.states.get("light.bed").state == "off"
+    await hass.services.async_call("switch", "turn_off", {"entity_id": "switch.bedroom_only_when_dark"}, blocking=True)
+    await flat.tick(1)
+    assert hass.states.get("light.bed").state == "on"
+
+
 async def test_manual_off_survives_toilet_trip(hass: HomeAssistant, flat: Flat, monkeypatch) -> None:
     calls = mock_lights(hass)
     hass.states.async_set("light.bed", "off", {"supported_color_modes": ["brightness"]})
