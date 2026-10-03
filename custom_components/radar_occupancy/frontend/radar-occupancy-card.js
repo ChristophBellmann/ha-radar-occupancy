@@ -279,6 +279,11 @@ class RadarOccupancyCard extends HTMLElement {
       this.pendingSample=null;this.mode='view';this.render();
     }
   }
+  openSimulationPanel() {
+    this.panels.simulation=true;
+    const panel=this.shadowRoot.querySelector?.('details[data-panel="simulation"]');
+    if(panel)panel.open=true;
+  }
   async simulateRoom() {
     const current=this.data()?.sensors?.find(s=>s.id===this.selected);
     if(!current?.polygon?.length)return;
@@ -292,13 +297,13 @@ class RadarOccupancyCard extends HTMLElement {
     if(!candidates.length)return;
     const point=candidates[0],next=candidates.find(p=>Math.hypot(p[0]-point[0],p[1]-point[1])>1000)||point;
     this.simPersons=[{id:this.t('sim_person',{n:1}),route:[{room:this.selected,x:point[0],y:point[1],seconds:4},{room:this.selected,x:next[0],y:next[1],seconds:Math.max(3,Math.ceil(Math.hypot(next[0]-point[0],next[1]-point[1])/800))},{room:this.selected,x:next[0],y:next[1],seconds:10}]}];
-    this.simPerson=0;this.panels.simulation=true;
+    this.simPerson=0;this.openSimulationPanel();
     await this.startSimulation();
   }
   async startSimulation() {
     const persons=this.simPersons.filter(p=>p.route.length);
     if(!persons.length){this.message=this.t('sim_need_points');this.render();return;}
-    this.mode='view';this.panels.simulation=true;
+    this.mode='view';this.openSimulationPanel();
     await this.service('start_simulation',{persons,live_lights:this.simLive,ignore_restrictions:true});
   }
   addSimPoint(floor,coords,data) {
@@ -313,7 +318,7 @@ class RadarOccupancyCard extends HTMLElement {
   }
   simulationPanel(data) {
     const sim=data.simulation||{},running=sim.running,route=this.simPersons[this.simPerson].route;
-    const counts=Object.entries(sim.people||{}).filter(([,n])=>n).map(([id,n])=>`${data.sensors.find(s=>s.id===id)?.room||id}: ${n}`).join(' · ');
+    const counts=Object.entries(sim.people||{}).filter(([,n])=>n).map(([id,n])=>`${data.sensors.find(s=>s.id===id)?.room||data.sensors.flatMap(s=>s.sub_areas||[]).find(a=>a.id===id)?.name||this.roomName(id)}: ${n}`).join(' · ');
     return `<ha-card><details data-panel="simulation" ${this.panels.simulation?'open':''}><summary>${escapeHtml(this.t('simulation'))}<span class="summary-note">${escapeHtml(running?this.t(sim.live_lights?'sim_live':'sim_preview'):this.t('sim_preview'))}</span></summary><div class="section-body"><p class="muted">${escapeHtml(this.t('sim_hint'))}</p><div class="toolbar"><select id="sim-person" aria-label="${escapeHtml(this.t('simulation'))}" ${running?'disabled':''}>${this.simPersons.map((p,i)=>`<option value="${i}" ${i===this.simPerson?'selected':''}>${escapeHtml(p.id)}</option>`).join('')}</select><button id="sim-add" ${running||this.simPersons.length>=8?'disabled':''}>${escapeHtml(this.t('sim_add'))}</button><span style="color:${SIM_COLORS[this.simPerson]}">${escapeHtml(this.t('sim_points',{n:route.length}))}</span></div><div class="toolbar"><button id="sim-draw" ${running?'disabled':''}>${escapeHtml(this.t('sim_draw'))}</button><button id="sim-pause" ${running||!route.at(-1)?.room||route.length>=30?'disabled':''}>${escapeHtml(this.t('sim_pause'))}</button><button id="sim-lost" ${running||!route.length||route.length>=30?'disabled':''}>${escapeHtml(this.t('sim_lost'))}</button><button id="sim-undo" ${running||!route.length?'disabled':''}>${escapeHtml(this.t('sim_undo'))}</button><button id="sim-clear" ${running?'disabled':''}>${escapeHtml(this.t('sim_clear'))}</button></div><label><input id="sim-live" style="width:auto" type="checkbox" ${this.simLive?'checked':''} ${running?'disabled':''}/> ${escapeHtml(this.t('sim_live'))}</label><p class="muted">${escapeHtml(this.t('sim_restore'))}</p><div class="toolbar"><button id="sim-start" ${running||this.busy?'disabled':''}>${escapeHtml(this.t('sim_start'))}</button><button id="sim-stop" ${!running||this.busy?'disabled':''}>${escapeHtml(this.t('sim_stop'))}</button>${running?`<span>${escapeHtml(this.t('sim_running',{s:sim.elapsed,d:sim.duration}))}</span>`:''}</div>${counts?`<p>${escapeHtml(this.t('sim_counts'))}: ${escapeHtml(counts)}</p>`:''}${sim.error?`<p class="danger">${escapeHtml(sim.error)}</p>`:''}${sim.unavailable_lights?.length?`<p class="muted">${escapeHtml(sim.unavailable_lights.join(', '))}: unavailable</p>`:''}</div></details></ha-card>`;
   }
   async service(name,data={}) {
