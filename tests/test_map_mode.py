@@ -352,10 +352,13 @@ async def test_other_automation_is_not_by_hand(hass: HomeAssistant, flat: Flat, 
     await hass.services.async_call(
         "light", "turn_on", {"entity_id": "light.bed", "brightness": 200}, blocking=True, context=automation
     )
+    # Service completion precedes the queued state_changed callbacks.
+    await hass.async_block_till_done()
     assert "light.bed" not in hass.data[DOMAIN].lights.brightness
     await hass.services.async_call(
         "light", "turn_on", {"entity_id": "light.bed", "brightness": 90}, blocking=True, context=Context(user_id="u")
     )
+    await hass.async_block_till_done()
     assert hass.data[DOMAIN].lights.brightness["light.bed"] == 90
 
 
