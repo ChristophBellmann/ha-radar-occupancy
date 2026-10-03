@@ -201,6 +201,27 @@
     },
     "calibrate_first": {
       "message": "Zuerst einmessen oder Sensor platzieren und ausrichten."
+    },
+    "samples_collinear": {
+      "message": "Die Messpunkte liegen zu dicht oder auf einer Linie."
+    },
+    "samples_too_few": {
+      "message": "Mindestens drei räumlich verteilte Messpunkte nötig."
+    },
+    "samples_flat": {
+      "message": "Die Messpunkte bilden ein zu kleines oder zu flaches Dreieck. Gehe seitlich aus der Linie der bisherigen Punkte heraus, möglichst 1 m weit. Der neue Punkt wurde nicht gespeichert."
+    },
+    "samples_inconsistent": {
+      "message": "Messabweichung über 40 cm; Punkte bitte erneut messen."
+    },
+    "outline_points": {
+      "message": "Eine Grenze braucht 3 bis 30 Eckpunkte."
+    },
+    "outline_small": {
+      "message": "Die Grenze ist zu klein."
+    },
+    "outline_crossing": {
+      "message": "Die Grenze darf sich nicht kreuzen."
     }
   },
   "services": {

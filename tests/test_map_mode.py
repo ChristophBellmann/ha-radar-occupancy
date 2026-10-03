@@ -270,7 +270,7 @@ async def test_overview_release_and_hold(hass: HomeAssistant, flat: Flat, monkey
     assert sensors["Bedroom"]["map_ready"] and sensors["Bedroom"]["people"] == 1
     assert sensors["Bedroom"]["entities"]["hold"] == "switch.bedroom_hold_occupancy"
     doors = {(d["a"], d["b"]) for d in overview.attributes["doors"]}
-    assert ("Hall", "draußen") in doors and ("Bedroom", "Hall") in doors
+    assert ("Hall", "outside") in doors and ("Bedroom", "Hall") in doors
     await hass.services.async_call(DOMAIN, "release", {"room": "binary_sensor.bedroom"}, blocking=True)
     await flat.tick(1)
     assert not flat.occupied("bed")

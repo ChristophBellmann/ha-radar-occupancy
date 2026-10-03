@@ -1,13 +1,16 @@
 """People per room from the radar targets of all sensors (map mode).
 
 Free of Home Assistant imports. Coordinates are map millimetres per floor;
-rooms are identified by key (the config entry id), `labels` gives the names
-used in the human-readable reasons.
+rooms are identified by key (the config entry id), `labels` gives their
+display names.
 
-Grundsatz: Ein Raum wird nur leer, wenn jemand nachweislich durch eine Tür
-hinausgegangen ist. Verschwindet ein Ziel mitten im Raum, sitzt dort jemand
-still. Mehrere Personen werden über Türübergänge gezählt; dass jemand in
-einem anderen Raum gesehen wird, sagt nichts über diesen Raum.
+Principle: a room only becomes empty when someone evidently walked out
+through a door. A target that vanishes in the middle of a room is someone
+sitting still. Several people are counted through door passages; someone
+being seen in another room says nothing about this room.
+
+Reasons are stable codes (see REASONS) plus the rooms involved, so the
+frontend can translate them and automations can rely on them.
 """
 
 from __future__ import annotations
@@ -18,20 +21,30 @@ from itertools import count as counter
 from .geometry import distance, inside
 
 OUTSIDE = "outside"  # everything without a radar: stairs, front door, unsensed map rooms
-MERGE = 800  # mm: Ziele verschiedener Sensoren, die dieselbe Person sind
-GATE = 1500  # mm: größter Sprung einer Spur zwischen zwei Messungen
-TRACK_TTL = 2.0  # s ohne Messung: Spur endet
-EDGE = 400  # mm: Unschärfe an Raumgrenzen
-DOOR_PASS = 1300  # mm: Raumwechsel einer Spur nur so nah an einer Tür
-DOOR_NEAR = 1100  # mm: Auftauchen „an der Tür“
-DOOR_LEAVE = 800  # mm: Verschwinden „an der Tür“ (strenger: sonst geht Licht aus)
-DOOR_APPROACH = 300  # mm: so viel muss sich ein Ziel der Tür genähert haben
-APPROACH_ZONE = 1500  # mm: Vorblenden, wenn ein Ziel so nah auf eine Tür zugeht
-PAIR_WINDOW = 8.0  # s: Verschwinden an der Tür und Auftauchen drüben
-UNSEEN_PASS = 2.0  # s: Tür in einen nicht einsehbaren Bereich
-CONFIRM_ONE = 1.0  # s: erstes Ziel in einem leeren Raum
-CONFIRM_MORE = 3.0  # s: weiteres gleichzeitig sichtbares Ziel
-SEPARATION = 1000  # mm: so weit müssen zwei gleichzeitige Ziele auseinander sein
+MERGE = 800  # mm: targets of different sensors that are the same person
+GATE = 1500  # mm: largest jump of a track between two measurements
+TRACK_TTL = 2.0  # s without a measurement: the track ends
+EDGE = 400  # mm: tolerance at room outlines
+DOOR_PASS = 1300  # mm: a track changes rooms only this close to a door
+DOOR_NEAR = 1100  # mm: appearing "at the door"
+DOOR_LEAVE = 800  # mm: vanishing "at the door" (stricter: it switches lights off)
+DOOR_APPROACH = 300  # mm: a target must have come this much closer to the door
+APPROACH_ZONE = 1500  # mm: pre-light when a target walks this close towards a door
+PAIR_WINDOW = 8.0  # s: vanishing at a door and appearing on the other side
+UNSEEN_PASS = 2.0  # s: door into an area no sensor sees
+CONFIRM_ONE = 1.0  # s: first target in an empty room
+CONFIRM_MORE = 3.0  # s: each further target visible at the same time
+SEPARATION = 1000  # mm: two simultaneous targets must be this far apart
+
+# Reason codes
+SEEN = "seen_in_room"  # someone visible in the room
+MOVED = "moved"  # walked from one room to another (from, to)
+CAME_IN = "came_in"  # came from outside the home
+APPEARED_AT_DOOR = "appeared_at_door"  # at the door to `from`, nobody seen leaving there
+WENT_OUT = "went_out"  # left the home
+RELEASED = "released"  # released by hand
+HOLD_OFF = "hold_off"  # no target and hold switched off
+REASONS = (SEEN, MOVED, CAME_IN, APPEARED_AT_DOOR, WENT_OUT, RELEASED, HOLD_OFF)
 
 
 class Door:
@@ -39,7 +52,7 @@ class Door:
         self.a, self.b, self.floor, self.point, self.covered = a, b, floor, point, covered
 
     def covered_into(self, room):
-        """Sieht ein Sensor, wer durch diese Tür nach `room` geht?"""
+        """Does a sensor see who walks through this door into `room`?"""
         return self.covered.get(room, True) if isinstance(self.covered, dict) else self.covered
 
     def other(self, room):
@@ -79,15 +92,22 @@ class Presence:
         self.doors = doors or []
         self.counts = dict(counts or {})
         self.tracks = []
-        self.deaths = []  # offene Abgänge an Türen mit einsehbarer Gegenseite
+        self.deaths = []  # open departures at doors whose other side a sensor sees
         self.events = []
-        self.reasons = {}
-        self.approaching = {}  # Raum -> Zeitpunkt der letzten Annäherung an seine Tür
+        self.reasons = {}  # room -> {"code": ..., "from": room key, "to": room key}
+        self.approaching = {}  # room -> time of the last approach to its door
 
     def name(self, room):
-        return "draußen" if room == OUTSIDE else self.labels.get(room, room)
+        return OUTSIDE if room == OUTSIDE else self.labels.get(room, room)
 
-    # -- Aufbau -------------------------------------------------------------
+    def reason(self, room):
+        """Reason of a room with display names, or None."""
+        reason = self.reasons.get(room)
+        if reason is None:
+            return None
+        return {k: self.name(v) if k in ("from", "to") and v is not None else v for k, v in reason.items()}
+
+    # -- Setup ---------------------------------------------------------------
     def configure(self, rooms, doors, labels=None):
         self.rooms, self.doors = rooms, doors
         if labels is not None:
@@ -114,35 +134,35 @@ class Presence:
                 best, best_distance = name, d
         return best
 
-    # -- Zähler -------------------------------------------------------------
+    # -- Counts ----------------------------------------------------------------
     def count(self, room):
         return self.counts.get(room, 0)
 
     def occupied(self, room):
         return self.count(room) > 0
 
-    def _change(self, room, delta, reason, now):
+    def _change(self, room, delta, code, now, source=None, target=None):
         if room is None or room == OUTSIDE or room not in self.rooms:
             return
         self.counts[room] = max(0, self.count(room) + delta)
-        self.reasons[room] = reason
-        self.events.append((now, room, delta, reason))
+        self.reasons[room] = {"code": code, "from": source, "to": target}
+        self.events.append((now, room, delta, code, source, target))
         del self.events[:-40]
 
-    def transfer(self, source, target, reason, now):
-        self._change(source, -1, reason, now)
-        self._change(target, +1, reason, now)
+    def transfer(self, source, target, now):
+        self._change(source, -1, MOVED, now, source, target)
+        self._change(target, +1, MOVED, now, source, target)
 
-    def reset(self, room, now, reason="freigegeben"):
+    def reset(self, room, now, code=RELEASED):
         self.counts[room] = 0
-        self.reasons[room] = reason
+        self.reasons[room] = {"code": code, "from": None, "to": None}
         for track in self.tracks:
             if track.room == room:
                 track.counted = False
         self.deaths = [d for d in self.deaths if d["room"] != room]
 
     def visible(self, room, now):
-        """Wie viele Personen sind sicher gleichzeitig zu sehen?"""
+        """How many people are certainly visible at the same time?"""
         tracks = [t for t in self.tracks if t.room == room and t.seen == now]
         first = [t for t in tracks if t.age(now) >= CONFIRM_ONE]
         if not first:
@@ -154,10 +174,10 @@ class Presence:
                 chosen.append(track)
         return max(1, len(chosen))
 
-    # -- Messschritt --------------------------------------------------------
+    # -- Measurement step --------------------------------------------------------
     def step(self, now, observations, hold=None):
-        """observations: Liste (floor, point[, room]); room erzwingt die Zuordnung
-        (Balkon). hold: Räume, deren Belegung nicht gehalten wird (Halten aus)."""
+        """observations: list of (floor, point[, room]); room forces the
+        assignment (sub-areas). hold: rooms whose occupancy is not held."""
         merged = self._merge(observations)
         alive = [t for t in self.tracks if now - t.seen <= TRACK_TTL]
         pairs = sorted(
@@ -191,10 +211,10 @@ class Presence:
             seen = self.visible(room, now)
             if seen > self.count(room):
                 self.counts[room] = seen
-                self.reasons[room] = "im Raum gesehen"
+                self.reasons[room] = {"code": SEEN, "from": None, "to": None}
             if hold and room in hold and seen == 0 and self.count(room):
                 self.counts[room] = 0
-                self.reasons[room] = "kein Ziel (Halten aus)"
+                self.reasons[room] = {"code": HOLD_OFF, "from": None, "to": None}
         self._approach(now)
 
     def _merge(self, observations):
@@ -225,7 +245,7 @@ class Presence:
         if track.room is None:
             track.room, track.room_since = room, now
             return
-        # Raumwechsel nur durch eine Tür; sonst sieht ein Sensor durch die Wand.
+        # Rooms change only through a door; otherwise a sensor sees through a wall.
         doors = self.door_between(track.room, room)
         if not any(
             d.point is None or min(d.distance(floor, previous) or 1e9, d.distance(floor, point) or 1e9) <= DOOR_PASS
@@ -240,10 +260,10 @@ class Presence:
             source = track.room
             track.room, track.pending, track.room_since = room, None, now
             if track.counted:
-                self.transfer(source, room, f"{self.name(source)} → {self.name(room)}", now)
+                self.transfer(source, room, now)
             else:
                 track.counted = True
-                self._change(room, +1, f"von {self.name(source)} gekommen", now)
+                self._change(room, +1, MOVED, now, source, room)
             self.deaths = [d for d in self.deaths if not (d["room"] == source and d["to"] == room)]
 
     def _door_near(self, track, now, require_approach):
@@ -265,7 +285,7 @@ class Presence:
         track.counted = True
         door = self._door_near(track, now, False)
         if door is None:
-            # Mitten im Raum aufgetaucht: jemand, der schon da war und still saß.
+            # Appeared in the middle of the room: someone who was there, sitting still.
             return
         other = door.other(track.room)
         paired = next(
@@ -274,12 +294,12 @@ class Presence:
         )
         if paired:
             self.deaths.remove(paired)
-            self.transfer(other, track.room, f"{self.name(other)} → {self.name(track.room)}", now)
+            self.transfer(other, track.room, now)
         elif other == OUTSIDE:
-            self._change(track.room, +1, "von draußen gekommen", now)
+            self._change(track.room, +1, CAME_IN, now, OUTSIDE, track.room)
         else:
-            # Gegenseite hat niemanden gehen sehen: nur hier zählen, drüben nichts abziehen.
-            self._change(track.room, +1, f"an der Tür zu {self.name(other)} aufgetaucht", now)
+            # Nobody was seen leaving on the other side: count here, take nothing off there.
+            self._change(track.room, +1, APPEARED_AT_DOOR, now, other, track.room)
 
     def _died(self, track, now):
         if not track.counted or track.room is None:
@@ -289,7 +309,7 @@ class Presence:
             return
         other = door.other(track.room)
         if other == OUTSIDE:
-            self._change(track.room, -1, "nach draußen gegangen", now)
+            self._change(track.room, -1, WENT_OUT, now, track.room, OUTSIDE)
         else:
             self.deaths.append({"time": now, "door": door, "room": track.room, "to": other})
 
@@ -297,13 +317,11 @@ class Presence:
         for death in list(self.deaths):
             door = death["door"]
             if not door.covered_into(death["to"]) and now - death["time"] >= UNSEEN_PASS:
-                # Drüben sieht kein Sensor hin: der Durchgang selbst ist der Nachweis.
+                # No sensor sees the other side: the passage itself is the evidence.
                 self.deaths.remove(death)
-                self.transfer(
-                    death["room"], death["to"], f"{self.name(death['room'])} → {self.name(death['to'])} (Tür)", now
-                )
+                self.transfer(death["room"], death["to"], now)
             elif now - death["time"] > PAIR_WINDOW:
-                # Drüben hätte man ihn sehen müssen: wohl doch noch im Raum.
+                # The other side should have seen them: probably still in the room.
                 self.deaths.remove(death)
 
     def _approach(self, now):
@@ -327,7 +345,7 @@ class Presence:
     def snapshot(self, now):
         return {
             "counts": dict(self.counts),
-            "reasons": dict(self.reasons),
+            "reasons": {room: self.reason(room) for room in self.reasons},
             "tracks": [
                 {
                     "id": t.id,
@@ -349,5 +367,15 @@ class Presence:
                 }
                 for d in self.doors
             ],
-            "events": [(round(t, 1), self.name(r), delta, why) for t, r, delta, why in self.events[-10:]],
+            "events": [
+                {
+                    "time": round(t, 1),
+                    "room": self.name(r),
+                    "delta": delta,
+                    "code": code,
+                    "from": self.name(a) if a is not None else None,
+                    "to": self.name(b) if b is not None else None,
+                }
+                for t, r, delta, code, a, b in self.events[-10:]
+            ],
         }

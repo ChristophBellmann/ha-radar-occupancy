@@ -158,7 +158,8 @@ class PresenceTests(unittest.TestCase):
     def test_reasons_use_labels(self):
         self.p.configure(ROOMS, doors(), labels={"Schlafzimmer": "Bedroom", "Gang": "Hall"})
         self.run_path([[1500, 1000]] * 3 + self.walk([1500, 1000], [5500, 1000]) + [[5500, 1000]] * 3)
-        assert self.p.reasons["Gang"] == "Bedroom → Hall"
+        assert self.p.reasons["Gang"] == {"code": "moved", "from": "Schlafzimmer", "to": "Gang"}
+        assert self.p.reason("Gang") == {"code": "moved", "from": "Bedroom", "to": "Hall"}
 
     def test_leaving_through_door_is_no_approach_back(self):
         self.run_path(self.walk([1500, 1000], [5000, 1000], 8) + [[5000, 1000]] * 2)

@@ -30,8 +30,8 @@ class OccupancySensor(RadarOccupancyEntity, BinarySensorEntity):
         target = self.target
         attrs: dict[str, Any] = {"light_owned": target.owned, "mode": "map" if target.on_map else "distance"}
         if target.on_map:
-            attrs["people"] = target.people
-            attrs["reason"] = target.reason
+            source, destination = self.manager.home.reason_rooms(target.entry_id)
+            attrs.update(people=target.people, reason=target.reason, reason_from=source, reason_to=destination)
         if isinstance(target, RoomTarget):
             room = target.room
             attrs.update(

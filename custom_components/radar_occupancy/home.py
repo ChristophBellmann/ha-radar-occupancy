@@ -41,6 +41,7 @@ from .const import (
     SIGNAL_HOME,
 )
 from .geometry import (
+    GeometryError,
     distance,
     fit,
     inside,
@@ -172,7 +173,14 @@ class Home:
         return self.tracking.count(entry_id)
 
     def reason(self, entry_id: str) -> str | None:
-        return self.tracking.reasons.get(entry_id)
+        """Stable reason code of the last change of a room's count."""
+        reason = self.tracking.reasons.get(entry_id)
+        return reason["code"] if reason else None
+
+    def reason_rooms(self, entry_id: str) -> tuple[str | None, str | None]:
+        """Rooms of the last change (display names; "outside" for outside the home)."""
+        reason = self.tracking.reason(entry_id) or {}
+        return reason.get("from"), reason.get("to")
 
     def approaching(self, entry_id: str) -> bool:
         if not self.uses_map(entry_id):
@@ -511,6 +519,7 @@ class Home:
                 occupied=room.occupied,
                 people=self.people(room_id) if room_id in self.ready else None,
                 occupancy_reason=room.reason,
+                occupancy_reason_rooms=self.reason_rooms(room_id) if room_id in self.ready else None,
                 hold_enabled=room.room.hold,
                 light=room.light,
                 light_mode=lights.mode(room.light),
@@ -590,8 +599,8 @@ class Home:
         if len([s for s in samples if s.get("area") in (None, "room")]) >= 3:
             try:
                 entry["transform"], entry["error_mm"] = fit(samples)
-            except ValueError as err:
-                raise HomeAssistantError(str(err)) from err
+            except GeometryError as err:
+                raise HomeAssistantError(translation_domain=const.DOMAIN, translation_key=err.code) from err
         self._store(room_id, entry)
 
     def undo_sample(self, room_id: str) -> None:
@@ -602,7 +611,10 @@ class Home:
         current.pop("transform", None)
         current.pop("error_mm", None)
         if len([s for s in current["samples"] if s.get("area") in (None, "room")]) >= 3:
-            current["transform"], current["error_mm"] = fit(current["samples"])
+            try:
+                current["transform"], current["error_mm"] = fit(current["samples"])
+            except GeometryError:
+                pass  # the remaining samples do not fit; calibrate again
         self._store(room_id, current)
 
     def sample_area(self, room_id: str, index: int, area: str) -> None:
@@ -613,8 +625,8 @@ class Home:
         samples[index - 1]["area"] = area
         try:
             current["transform"], current["error_mm"] = fit(samples)
-        except ValueError as err:
-            raise HomeAssistantError(str(err)) from err
+        except GeometryError as err:
+            raise HomeAssistantError(translation_domain=const.DOMAIN, translation_key=err.code) from err
         current["samples"] = samples
         self._store(room_id, current)
 
@@ -647,8 +659,8 @@ class Home:
             raise HomeAssistantError(translation_domain=const.DOMAIN, translation_key="calibrate_first")
         try:
             current["approach_polygon" if kind == "approach" else "polygon"] = valid_polygon(points)
-        except ValueError as err:
-            raise HomeAssistantError(str(err)) from err
+        except GeometryError as err:
+            raise HomeAssistantError(translation_domain=const.DOMAIN, translation_key=err.code) from err
         self._store(room_id, current)
 
     def reset_calibration(self, room_id: str) -> None:

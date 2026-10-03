@@ -10,6 +10,14 @@ import math
 from collections import deque
 
 
+class GeometryError(ValueError):
+    """Invalid calibration or outline. `code` is a translation key of the integration."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
 def own_samples(samples):
     """Samples that belong to the room plane; sub-area samples are kept as reference only."""
     return [s for s in samples if s.get("area") in (None, "room")]
@@ -21,7 +29,7 @@ def solve(matrix, values):
         pivot = max(range(i, 3), key=lambda j: abs(rows[j][i]))
         rows[i], rows[pivot] = rows[pivot], rows[i]
         if abs(rows[i][i]) < 1e-8:
-            raise ValueError("Die Messpunkte liegen zu dicht oder auf einer Linie.")
+            raise GeometryError("samples_collinear")
         scale = rows[i][i]
         rows[i] = [v / scale for v in rows[i]]
         for j in range(3):
@@ -34,7 +42,7 @@ def solve(matrix, values):
 def fit(samples):
     samples = own_samples(samples)
     if len(samples) < 3:
-        raise ValueError("Mindestens drei räumlich verteilte Messpunkte nötig.")
+        raise GeometryError("samples_too_few")
     rows = [[s["radar"][0] / 1000, s["radar"][1] / 1000, 1] for s in samples]
     normal = [[sum(r[i] * r[j] for r in rows) for j in range(3)] for i in range(3)]
     coefficients = [
@@ -42,7 +50,7 @@ def fit(samples):
         for axis in range(2)
     ]
     error = math.sqrt(sum(math.dist(project(coefficients, *s["radar"]), s["map"]) ** 2 for s in samples) / len(samples))
-    # Extrapolation einer fast kollinearen Probe verhindern.
+    # Refuse to extrapolate from nearly collinear samples.
     spread = max(
         abs(
             (a["radar"][0] - c["radar"][0]) * (b["radar"][1] - c["radar"][1])
@@ -53,11 +61,9 @@ def fit(samples):
         for c in samples
     )
     if spread < 250000:
-        raise ValueError(
-            "Die Messpunkte bilden ein zu kleines oder zu flaches Dreieck. Gehe seitlich aus der Linie der bisherigen Punkte heraus, möglichst 1 m weit. Der neue Punkt wurde nicht gespeichert."
-        )
+        raise GeometryError("samples_flat")
     if error > 400:
-        raise ValueError("Messabweichung über 40 cm; Punkte bitte erneut messen.")
+        raise GeometryError("samples_inconsistent")
     return coefficients, round(error)
 
 
@@ -87,11 +93,11 @@ def distance(point, polygon):
 
 def valid_polygon(points):
     if len(points) < 3 or len(points) > 30:
-        raise ValueError("Raumgrenze braucht 3 bis 30 Eckpunkte.")
+        raise GeometryError("outline_points")
     if abs(sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(points, points[1:] + points[:1]))) < 500000:
-        raise ValueError("Raumgrenze ist zu klein.")
+        raise GeometryError("outline_small")
 
-    # Sich kreuzende Kanten ergeben keine eindeutige Raumgrenze.
+    # Crossing edges give no unambiguous outline.
     def cross(a, b, c):
         return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
 
@@ -101,12 +107,12 @@ def valid_polygon(points):
             if j <= i + 1 or (i == 0 and j == len(edges) - 1):
                 continue
             if cross(a, b, c) * cross(a, b, d) < 0 and cross(c, d, a) * cross(c, d, b) < 0:
-                raise ValueError("Die Raumgrenze darf sich nicht kreuzen.")
+                raise GeometryError("outline_crossing")
     return points
 
 
 def segment_outlines(pixels, dimensions, room_id):
-    """Eigene Kontur aus Raumzellen; keine umschließende Rechteck-Näherung."""
+    """Outlines of a room from its map cells, not its bounding rectangle."""
     if pixels is None or dimensions is None:
         return []
     cells = {
@@ -117,7 +123,7 @@ def segment_outlines(pixels, dimensions, room_id):
     }
     if not cells:
         return []
-    # Nur Außenkanten behalten, gegen den Uhrzeigersinn um jede Zelle.
+    # Keep only outer edges, counter-clockwise around every cell.
     edges = set()
     for x, y in cells:
         for a, b, neighbor in [
@@ -143,7 +149,7 @@ def segment_outlines(pixels, dimensions, room_id):
             candidates = outgoing.get(current, set())
             if not candidates:
                 return []
-            # An diagonal berührenden Zellen die linke Abzweigung nehmen.
+            # Where cells touch diagonally, take the left turn.
             dx, dy = current[0] - previous[0], current[1] - previous[1]
             nxt = max(candidates, key=lambda p: dx * (p[1] - current[1]) - dy * (p[0] - current[0]))
             edges.remove((current, nxt))
@@ -155,7 +161,7 @@ def segment_outlines(pixels, dimensions, room_id):
     for outer in loops:
         if area(outer) <= 0:
             continue
-        # Gerade Teilstücke zusammenfassen; Innenaussparungen (Möbel) bleiben Raum.
+        # Merge straight runs; holes inside (furniture) stay part of the room.
         reduced = [
             b
             for a, b, c in zip(outer[-1:] + outer[:-1], outer, outer[1:] + outer[:1])
@@ -177,7 +183,8 @@ def segment_outline(pixels, dimensions, room_id):
 
 
 def doorway_approaches(pixels, dimensions, room_id, room_ids, allowed_neighbors=None):
-    """Nur über verbundene Boden-Raumzellen erreichbar, maximal 1,5 m Weg."""
+    """Area in front of a room's doors: floor cells of neighbouring rooms
+    reachable through connected floor within 1.5 m."""
     if pixels is None or dimensions is None:
         return []
 
@@ -218,10 +225,10 @@ def doorway_approaches(pixels, dimensions, room_id, room_ids, allowed_neighbors=
 
 
 def rigid(location, heading, mirrored=False):
-    """Maßstabstreue Umrechnung aus Montageort und Blickrichtung.
+    """True-to-scale transform from mounting point and viewing direction.
 
-    `heading` ist die Blickrichtung (Radar-Y) in Grad im Kartensystem,
-    gegen den Uhrzeigersinn ab +X. Radar-X zeigt ungespiegelt nach rechts.
+    `heading` is the viewing direction (radar Y) in degrees in map
+    coordinates, counter-clockwise from +X. Unmirrored, radar X points right.
     """
     h = math.radians(heading)
     m = -1 if mirrored else 1
@@ -232,13 +239,13 @@ def rigid(location, heading, mirrored=False):
 
 
 def orientation(coefficients):
-    """Blickrichtung und Spiegelung, die eine affine Umrechnung nahelegt."""
+    """Viewing direction and mirroring suggested by an affine transform."""
     (a, b, _), (c, d, _) = coefficients
     return round(math.degrees(math.atan2(d, b)) % 360, 1), a * d - b * c < 0
 
 
 def scales(coefficients):
-    """Größte und kleinste Streckung (Karte je Radar-Millimeter)."""
+    """Largest and smallest stretch (map per radar millimetre)."""
     (a, b, _), (c, d, _) = coefficients
     a, b, c, d = a / 1000, b / 1000, c / 1000, d / 1000
     p, q = (a * a + c * c + b * b + d * d) / 2, abs(a * d - b * c)
@@ -247,7 +254,7 @@ def scales(coefficients):
 
 
 def plausible(coefficients):
-    """Radar und Karte messen beide Millimeter; starke Verzerrung ist ein Messfehler."""
+    """Radar and map both measure millimetres; strong distortion is a measuring error."""
     big, small = scales(coefficients)
     return small >= 0.5 and big <= 2.2
 
@@ -262,9 +269,8 @@ def rms_error(coefficients, samples):
 
 
 def doorways(pixels, dimensions, room_ids):
-    """Durchgänge zwischen Räumen der Roboterkarte: zusammenhängende Stellen,
-    an denen Bodenzellen zweier Räume aneinanderstoßen. Ergebnis je
-    Durchgang: (raum_a, raum_b, Mittelpunkt in mm, Breite in mm)."""
+    """Passages between map rooms: connected places where floor cells of two
+    rooms touch. One tuple per passage: (room_a, room_b, centre mm, width mm)."""
     if pixels is None or dimensions is None:
         return []
 

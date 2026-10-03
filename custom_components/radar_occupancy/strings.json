@@ -201,6 +201,27 @@
     },
     "calibrate_first": {
       "message": "Calibrate first, or place and orient the sensor."
+    },
+    "samples_collinear": {
+      "message": "The calibration points are too close together or on one line."
+    },
+    "samples_too_few": {
+      "message": "At least three spread-out calibration points are needed."
+    },
+    "samples_flat": {
+      "message": "The calibration points form a triangle that is too small or too flat. Step sideways out of the line of the previous points, about 1 m. The new point was not saved."
+    },
+    "samples_inconsistent": {
+      "message": "The calibration points disagree by more than 40 cm; please measure them again."
+    },
+    "outline_points": {
+      "message": "An outline needs 3 to 30 corners."
+    },
+    "outline_small": {
+      "message": "The outline is too small."
+    },
+    "outline_crossing": {
+      "message": "The outline must not cross itself."
     }
   },
   "services": {
