@@ -24,7 +24,7 @@ assert.equal(definitions, 1, 'Mehrfaches Laden darf keine doppelte Registrierung
 const Card = registry.get('radar-occupancy-card');
 assert.equal(context.window.customCards.length, 1);
 const card = new Card();
-card._hass = { states: { 'camera.test': { attributes: { entity_picture: '/api/camera_proxy/camera.test' } } } };
+card._hass = { language: 'de', states: { 'camera.test': { attributes: { entity_picture: '/api/camera_proxy/camera.test' } } } };
 card.images.oben={url:'/api/camera_proxy/camera.test'};
 card.images.unten={url:'/api/camera_proxy/camera.test'};
 const data = {
@@ -73,6 +73,7 @@ card.hass = startup;
 card.hass = startup;
 assert.equal(renders,1);
 card.hass = { states: { ...startup.states, 'camera.roboter_map_1': { attributes: { entity_picture:'/api/camera_proxy/camera.test' } } } };
+card._hass.language = 'de';
 assert.equal(renders,2,'Eine später geladene Kamera muss die Anzeige aktualisieren.');
 
 const zoomCard = new Card();
@@ -147,7 +148,7 @@ const completedMarkup=card.setupSummary(ready);
 assert.ok(completedMarkup.includes('Bad: Einmessen abgeschlossen'));
 assert.ok(completedMarkup.includes('4 Messpunkte gespeichert'));
 assert.ok(completedMarkup.includes('8,7 cm'));
-assert.ok(completedMarkup.includes('automatisch aus der Roboterkarte'));
+assert.ok(completedMarkup.includes('automatisch aus der Karte'));
 assert.ok(completedMarkup.includes('Türvorbereich'));
 assert.ok(card.setupSummary({...ready,polygon:[]}).includes('noch nicht verfügbar'));
 assert.ok(!card.setupSummary({...ready,calibrated:false}).includes('Einmessen abgeschlossen'));
@@ -259,6 +260,7 @@ console.log('Karte registriert sich neben einer alten Positionskarte.');
 // Blickfeld: Fächer bei Wandmontage, Ellipse bei Deckenmontage, Drehung speichert verzögert.
 {
   const c=new Card();
+  c._hass={language:'de',states:{}};
   c.images.oben={url:'/x.png'};c.selected='s';
   const base={floors:{oben:data.floors.oben},targets:[]};
   const wall={id:'s',room:'Bad',floor:'oben',sensor_location:[0,0],heading:90,mirrored:false,mount:'wall',transform_source:'orientation'};
@@ -293,6 +295,7 @@ console.log('Karte registriert sich neben einer alten Positionskarte.');
 // Personenzahl, „manuell aus“ und Türen.
 {
   const c=new Card();
+  c._hass={language:'de',states:{}};
   assert.equal(c.roomStatus({available:true,calibrated:true,map_ready:true,people:2,zone:'lost'}),'2 Personen');
   assert.equal(c.roomStatus({available:true,calibrated:true,map_ready:true,people:0,zone:'lost'}),'Frei');
   assert.equal(c.roomStatus({available:true,calibrated:true,map_ready:true,people:1,zone:'inside',light_mode:'manual_off'}),'1 Person · Licht manuell aus');
@@ -314,4 +317,38 @@ console.log('Karte registriert sich neben einer alten Positionskarte.');
   c.images.oben={url:'/x.png'};
   assert.ok(c.floor('oben',{...data,sensors:[]}).includes('data-flip-floor="oben" data-flipped="true"'));
   console.log('Ausgang markieren und Drehknopf geprüft.');
+})().catch(error=>{console.error(error);process.exitCode=1;});
+
+// English for every other language; reasons as codes with rooms.
+{
+  const c=new Card();
+  c._hass={language:'fr',states:{}};
+  assert.equal(c.roomStatus({available:true,calibrated:true,map_ready:true,people:2,zone:'lost'}),'2 people');
+  assert.equal(c.reasonText('moved',['Bedroom','Hall']),'Bedroom → Hall');
+  assert.equal(c.reasonText('came_in',['outside','Hall']),'came in from outside');
+  c._hass={language:'de',states:{}};
+  assert.equal(c.reasonText('appeared_at_door',['outside','Gang']),'an der Tür zu draußen aufgetaucht');
+  const summary=c.setupSummary({id:'a',room:'Bad',calibrated:true,samples:3,polygon:[[0,0],[1,0],[0,1]],boundary_source:'manual',approach_polygons:[],doors:[{to:'b',point:[0,0]}],map_ready:true,occupied:true,occupancy_reason:'moved',occupancy_reason_rooms:['Gang','Bad']});
+  assert.ok(summary.includes('1 Türen markiert') || summary.includes('Türen markiert'));
+  assert.ok(summary.includes('Gang → Bad'));
+  console.log('Sprachen und Begründungen geprüft.');
+}
+
+// Tür markieren: Raum dahinter wählen, Tippen speichert sofort.
+(async()=>{
+  const c=new Card();let stored;
+  c._hass={language:'en',states:{}};
+  c.mode='door';c.selected='s';c.render=()=>{};
+  c.service=async(name,payload)=>{stored={name,...payload};return true;};
+  c.images.oben={url:'/x.png'};
+  const sensors=[{id:'s',room:'Bed',floor:'oben'},{id:'h',room:'Hall',floor:'oben'}];
+  const markup=c.floor('oben',{...data,sensors});
+  assert.ok(markup.includes('data-door-to'));
+  assert.ok(markup.includes('<option value="h" selected>Hall</option>'));
+  assert.ok(markup.includes('<option value="outside" >outside</option>'));
+  const svg={dataset:{floor:'oben'},createSVGPoint:()=>({matrixTransform(m){return m.apply(this.x,this.y);}}),
+    querySelector:()=>({getScreenCTM:()=>({inverse:()=>({apply:(x,y)=>({x:1000-x,y:1000-y})})})})};
+  await c.mapClick({clientX:850,clientY:150},svg,{floor:'oben'},data);
+  assert.deepEqual({...stored},{name:'set_door',room:'s',to:'h',x:500,y:500});
+  console.log('Tür markieren geprüft.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
