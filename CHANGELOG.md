@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.4
+
+- Automatic multi-person walks: choose the number of people and duration,
+  then start. Each person gets independent destinations, walking speed and
+  pauses. Default animation now needs no manually placed waypoints.
+- Paths follow calibrated room outlines and known doors. Visibility paths
+  keep walks inside concave rooms; disconnected maps get separate starting
+  people without inventing connections through walls or between floors.
+- Automatic planning runs in a worker from a configuration snapshot. The card
+  displays the generated paths and colored moving people on all floor maps.
+- `start_simulation` supports `automatic`, `count`, `duration`, optional
+  starting `room` and a repeatable `seed`. Manual paths remain available.
+
 ## 0.3.3
 
 - Animated map simulation with up to eight simultaneous people, individual

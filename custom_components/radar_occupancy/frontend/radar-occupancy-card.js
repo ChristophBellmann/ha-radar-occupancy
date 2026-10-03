@@ -14,6 +14,8 @@ function pointInside(point, polygon) {
   }
   return result;
 }
+Object.assign(I18N.de,{sim_auto:'Wege automatisch erstellen',sim_count:'Personen',sim_duration:'Dauer',sim_minutes:'{n} Minuten',sim_auto_hint:'Räume und Türen bestimmen die Wege. Jede Person läuft unabhängig mit eigenen Zielen und Pausen.',sim_auto_ready:'Automatischer Rundgang',sim_tour:'Rundgang simulieren'});
+Object.assign(I18N.en,{sim_auto:'Generate paths automatically',sim_count:'People',sim_duration:'Duration',sim_minutes:'{n} minutes',sim_auto_hint:'Paths follow rooms and doorways. Each person walks independently with individual destinations and pauses.',sim_auto_ready:'Automatic walk',sim_tour:'Simulate walk'});
 function tr(lang,key,vars={}) {
   const text=I18N[lang]?.[key]??I18N.en[key]??key;
   return text.replace(/\{(\w+)\}/g,(match,name)=>vars[name]??'');
@@ -37,7 +39,7 @@ function rigid(location,heading,mirrored) {
 const projectRadar=(t,x,y)=>[t[0][0]*x/1000+t[0][1]*y/1000+t[0][2],t[1][0]*x/1000+t[1][1]*y/1000+t[1][2]];
 const FOV_DEG=60,FOV_RANGE=6000,FOV_PITCH=35;
 class RadarOccupancyCard extends HTMLElement {
-  constructor() { super(); this.attachShadow({mode:'open'}); this.selected=null;this.entityId=null; this.mode='view';this.pendingSample=null;this.draft=[];this.message='';this.busy=false; this.viewports={};this.images={};this.panels={calibration:false,transitions:false,help:false,maintenance:false};this.interaction=false;this.deferred=false;this.orient=null;this.orientTimer=null;this.simPersons=[{id:'Person 1',route:[]}];this.simPerson=0;this.simLive=false; }
+  constructor() { super(); this.attachShadow({mode:'open'}); this.selected=null;this.entityId=null; this.mode='view';this.pendingSample=null;this.draft=[];this.message='';this.busy=false; this.viewports={};this.images={};this.panels={calibration:false,transitions:false,help:false,maintenance:false};this.interaction=false;this.deferred=false;this.orient=null;this.orientTimer=null;this.simPersons=[{id:'Person 1',route:[]},{id:'Person 2',route:[]}];this.simPerson=0;this.simLive=false;this.simAuto=true;this.simDuration=180; }
   setConfig(config) { this.config=config||{}; }
   lang() { const l=String(this._hass?.locale?.language||this._hass?.language||'en').toLowerCase();return l.startsWith('de')?'de':'en'; }
   t(key,vars) { return tr(this.lang(),key,vars); }
@@ -81,7 +83,7 @@ class RadarOccupancyCard extends HTMLElement {
     else this.render();
   }
   sensorSelectFocused() {
-    return ['sensor','sim-person'].includes(this.shadowRoot.activeElement?.id)||Boolean(this.shadowRoot.activeElement?.dataset?.setting);
+    return ['sensor','sim-person','sim-count','sim-duration'].includes(this.shadowRoot.activeElement?.id)||Boolean(this.shadowRoot.activeElement?.dataset?.setting);
   }
   bindSensorSelect(select) {
     select.onchange=event=>{
@@ -285,25 +287,17 @@ class RadarOccupancyCard extends HTMLElement {
     if(panel)panel.open=true;
   }
   async simulateRoom() {
-    const current=this.data()?.sensors?.find(s=>s.id===this.selected);
-    if(!current?.polygon?.length)return;
-    const polygon=current.polygon,xs=polygon.map(p=>p[0]),ys=polygon.map(p=>p[1]);
-    const candidates=[];
-    for(let x=1;x<20;x++)for(let y=1;y<20;y++) {
-      const point=[Math.min(...xs)+(Math.max(...xs)-Math.min(...xs))*x/20,Math.min(...ys)+(Math.max(...ys)-Math.min(...ys))*y/20];
-      if(pointInside(point,polygon))candidates.push(point);
-    }
-    candidates.sort((a,b)=>Math.hypot(a[0]-(Math.min(...xs)+Math.max(...xs))/2,a[1]-(Math.min(...ys)+Math.max(...ys))/2)-Math.hypot(b[0]-(Math.min(...xs)+Math.max(...xs))/2,b[1]-(Math.min(...ys)+Math.max(...ys))/2));
-    if(!candidates.length)return;
-    const point=candidates[0],next=candidates.find(p=>Math.hypot(p[0]-point[0],p[1]-point[1])>1000)||point;
-    this.simPersons=[{id:this.t('sim_person',{n:1}),route:[{room:this.selected,x:point[0],y:point[1],seconds:4},{room:this.selected,x:next[0],y:next[1],seconds:Math.max(3,Math.ceil(Math.hypot(next[0]-point[0],next[1]-point[1])/800))},{room:this.selected,x:next[0],y:next[1],seconds:10}]}];
-    this.simPerson=0;this.openSimulationPanel();
+    this.simAuto=true;this.openSimulationPanel();
     await this.startSimulation();
   }
   async startSimulation() {
+    this.mode='view';this.openSimulationPanel();
+    if(this.simAuto) {
+      await this.service('start_simulation',{automatic:true,count:this.simPersons.length,duration:this.simDuration,room:this.selected,live_lights:this.simLive,ignore_restrictions:true});
+      return;
+    }
     const persons=this.simPersons.filter(p=>p.route.length);
     if(!persons.length){this.message=this.t('sim_need_points');this.render();return;}
-    this.mode='view';this.openSimulationPanel();
     await this.service('start_simulation',{persons,live_lights:this.simLive,ignore_restrictions:true});
   }
   addSimPoint(floor,coords,data) {
@@ -317,9 +311,9 @@ class RadarOccupancyCard extends HTMLElement {
     this.render();
   }
   simulationPanel(data) {
-    const sim=data.simulation||{},running=sim.running,route=this.simPersons[this.simPerson].route;
+    const sim=data.simulation||{},running=sim.running,automatic=running?sim.automatic:this.simAuto,actorCount=running?(sim.routes?.length||this.simPersons.length):this.simPersons.length,route=this.simPersons[this.simPerson].route;
     const counts=Object.entries(sim.people||{}).filter(([,n])=>n).map(([id,n])=>`${data.sensors.find(s=>s.id===id)?.room||data.sensors.flatMap(s=>s.sub_areas||[]).find(a=>a.id===id)?.name||this.roomName(id)}: ${n}`).join(' · ');
-    return `<ha-card><details data-panel="simulation" ${this.panels.simulation?'open':''}><summary>${escapeHtml(this.t('simulation'))}<span class="summary-note">${escapeHtml(running?this.t(sim.live_lights?'sim_live':'sim_preview'):this.t('sim_preview'))}</span></summary><div class="section-body"><p class="muted">${escapeHtml(this.t('sim_hint'))}</p><div class="toolbar"><select id="sim-person" aria-label="${escapeHtml(this.t('simulation'))}" ${running?'disabled':''}>${this.simPersons.map((p,i)=>`<option value="${i}" ${i===this.simPerson?'selected':''}>${escapeHtml(p.id)}</option>`).join('')}</select><button id="sim-add" ${running||this.simPersons.length>=8?'disabled':''}>${escapeHtml(this.t('sim_add'))}</button><span style="color:${SIM_COLORS[this.simPerson]}">${escapeHtml(this.t('sim_points',{n:route.length}))}</span></div><div class="toolbar"><button id="sim-draw" ${running?'disabled':''}>${escapeHtml(this.t('sim_draw'))}</button><button id="sim-pause" ${running||!route.at(-1)?.room||route.length>=30?'disabled':''}>${escapeHtml(this.t('sim_pause'))}</button><button id="sim-lost" ${running||!route.length||route.length>=30?'disabled':''}>${escapeHtml(this.t('sim_lost'))}</button><button id="sim-undo" ${running||!route.length?'disabled':''}>${escapeHtml(this.t('sim_undo'))}</button><button id="sim-clear" ${running?'disabled':''}>${escapeHtml(this.t('sim_clear'))}</button></div><label><input id="sim-live" style="width:auto" type="checkbox" ${this.simLive?'checked':''} ${running?'disabled':''}/> ${escapeHtml(this.t('sim_live'))}</label><p class="muted">${escapeHtml(this.t('sim_restore'))}</p><div class="toolbar"><button id="sim-start" ${running||this.busy?'disabled':''}>${escapeHtml(this.t('sim_start'))}</button><button id="sim-stop" ${!running||this.busy?'disabled':''}>${escapeHtml(this.t('sim_stop'))}</button>${running?`<span>${escapeHtml(this.t('sim_running',{s:sim.elapsed,d:sim.duration}))}</span>`:''}</div>${counts?`<p>${escapeHtml(this.t('sim_counts'))}: ${escapeHtml(counts)}</p>`:''}${sim.error?`<p class="danger">${escapeHtml(sim.error)}</p>`:''}${sim.unavailable_lights?.length?`<p class="muted">${escapeHtml(sim.unavailable_lights.join(', '))}: unavailable</p>`:''}</div></details></ha-card>`;
+    return `<ha-card><details data-panel="simulation" ${this.panels.simulation?'open':''}><summary>${escapeHtml(this.t('simulation'))}<span class="summary-note">${escapeHtml(running?this.t(sim.live_lights?'sim_live':'sim_preview'):this.t('sim_preview'))}</span></summary><div class="section-body"><p class="muted">${escapeHtml(this.t(automatic?'sim_auto_hint':'sim_hint'))}</p><label><input id="sim-auto" style="width:auto" type="checkbox" ${automatic?'checked':''} ${running?'disabled':''}/> ${escapeHtml(this.t('sim_auto'))}</label><div class="toolbar" style="${automatic?'':'display:none'}"><label>${escapeHtml(this.t('sim_count'))} <select id="sim-count" ${running?'disabled':''}>${Array.from({length:8},(_,i)=>`<option value="${i+1}" ${actorCount===i+1?'selected':''}>${i+1}</option>`).join('')}</select></label><label>${escapeHtml(this.t('sim_duration'))} <select id="sim-duration" ${running?'disabled':''}>${[60,180,300,600,900].map(n=>`<option value="${n}" ${this.simDuration===n?'selected':''}>${escapeHtml(this.t('sim_minutes',{n:n/60}))}</option>`).join('')}</select></label></div><div class="toolbar" style="${automatic?'display:none':''}"><select id="sim-person" aria-label="${escapeHtml(this.t('simulation'))}" ${running?'disabled':''}>${this.simPersons.map((p,i)=>`<option value="${i}" ${i===this.simPerson?'selected':''}>${escapeHtml(p.id)}</option>`).join('')}</select><button id="sim-add" ${running||this.simPersons.length>=8?'disabled':''}>${escapeHtml(this.t('sim_add'))}</button><span style="color:${SIM_COLORS[this.simPerson]}">${escapeHtml(this.t('sim_points',{n:route.length}))}</span></div><div class="toolbar" style="${automatic?'display:none':''}"><button id="sim-draw" ${running?'disabled':''}>${escapeHtml(this.t('sim_draw'))}</button><button id="sim-pause" ${running||!route.at(-1)?.room||route.length>=30?'disabled':''}>${escapeHtml(this.t('sim_pause'))}</button><button id="sim-lost" ${running||!route.length||route.length>=30?'disabled':''}>${escapeHtml(this.t('sim_lost'))}</button><button id="sim-undo" ${running||!route.length?'disabled':''}>${escapeHtml(this.t('sim_undo'))}</button><button id="sim-clear" ${running?'disabled':''}>${escapeHtml(this.t('sim_clear'))}</button></div><label><input id="sim-live" style="width:auto" type="checkbox" ${(running?sim.live_lights:this.simLive)?'checked':''} ${running?'disabled':''}/> ${escapeHtml(this.t('sim_live'))}</label><p class="muted">${escapeHtml(this.t('sim_restore'))}</p><div class="toolbar"><button id="sim-start" ${running||this.busy?'disabled':''}>${escapeHtml(this.t('sim_start'))}</button><button id="sim-stop" ${!running||this.busy?'disabled':''}>${escapeHtml(this.t('sim_stop'))}</button>${running?`<span>${escapeHtml(this.t('sim_running',{s:sim.elapsed,d:sim.duration}))}</span>`:''}</div>${counts?`<p>${escapeHtml(this.t('sim_counts'))}: ${escapeHtml(counts)}</p>`:''}${sim.error?`<p class="danger">${escapeHtml(sim.error)}</p>`:''}${sim.unavailable_lights?.length?`<p class="muted">${escapeHtml(sim.unavailable_lights.join(', '))}: unavailable</p>`:''}</div></details></ha-card>`;
   }
   async service(name,data={}) {
     this.busy=true;this.render();
@@ -355,7 +349,7 @@ class RadarOccupancyCard extends HTMLElement {
       <div class="control-modes" role="group" aria-label="${escapeHtml(this.t('light_control'))}"><button data-control-mode="sensor" aria-pressed="${sensorMode}">${escapeHtml(this.t('mode_distance'))}</button><button data-control-mode="map" aria-pressed="${!sensorMode}">${escapeHtml(this.t('mode_map'))}</button></div>
       <div class="selector-row"><select id="sensor" aria-label="${escapeHtml(this.t('select_room'))}">${sensors.map(s=>`<option value="${escapeHtml(s.id)}" ${s.id===this.selected?'selected':''}>${escapeHtml(s.room)}</option>`).join('')}</select><div class="live-status">${detected.length?`${escapeHtml(this.t('detected'))}: <strong>${escapeHtml(detected.join(', '))}</strong>`:`<span class="muted">${escapeHtml(this.t('no_target'))}</span>`}</div></div>
       <div class="status">${sensors.map(s=>`<div class="room-tile ${s.id===this.selected?'selected':''}"><button class="room-button ${escapeHtml(s.zone)}" data-select-sensor="${escapeHtml(s.id)}" aria-pressed="${s.id===this.selected}"><strong>${escapeHtml(s.room)}</strong><span>${escapeHtml(this.roomStatus(s))}</span></button><button class="hold-button" data-toggle-hold="${escapeHtml(s.id)}" role="switch" aria-label="${escapeHtml(this.t('hold_aria',{room:s.room}))}" aria-checked="${s.hold_enabled!==false}">${escapeHtml(this.t(s.hold_enabled!==false?'hold_on':'hold_off'))}</button></div>`).join('')}</div>
-      <div class="toolbar"><button id="simulate-room" ${!current?.map_ready||this.busy||data.simulation?.running?'disabled':''}>${this._hass.language?.startsWith('de')?'Raum simulieren':'Simulate room'}</button><span class="muted">${escapeHtml(this.t('simulation')+' · '+this.t((data.simulation?.running?data.simulation.live_lights:this.simLive)?'sim_live':'sim_preview'))}</span></div>
+      <div class="toolbar"><button id="simulate-room" ${!current?.map_ready||this.busy||data.simulation?.running?'disabled':''}>${escapeHtml(this.t('sim_tour'))}</button><span class="muted">${escapeHtml(this.t('simulation')+' · '+this.t((data.simulation?.running?data.simulation.live_lights:this.simLive)?'sim_live':'sim_preview'))}</span></div>
       ${this.message?`<div class="notice" role="status">${escapeHtml(this.message)}</div>`:''}
     </ha-card>
     ${this.simulationPanel(data)}
@@ -374,6 +368,11 @@ class RadarOccupancyCard extends HTMLElement {
     const simRoute=()=>this.simPersons[this.simPerson].route;
     root.getElementById('sim-person').onchange=e=>{this.simPerson=Number(e.target.value);e.target.blur();this.render();};
     root.getElementById('sim-person').onblur=()=>{if(this.deferred)this.refreshView();};
+    root.getElementById('sim-auto').onchange=e=>{this.simAuto=e.target.checked;this.render();};
+    root.getElementById('sim-count').onchange=e=>{const count=Number(e.target.value);this.simPersons=Array.from({length:count},(_,i)=>this.simPersons[i]||{id:this.t('sim_person',{n:i+1}),route:[]});this.simPerson=Math.min(this.simPerson,count-1);e.target.blur();this.render();};
+    root.getElementById('sim-count').onblur=()=>{if(this.deferred)this.refreshView();};
+    root.getElementById('sim-duration').onchange=e=>{this.simDuration=Number(e.target.value);e.target.blur();this.render();};
+    root.getElementById('sim-duration').onblur=()=>{if(this.deferred)this.refreshView();};
     root.getElementById('sim-add').onclick=()=>{this.simPerson=this.simPersons.length;this.simPersons.push({id:this.t('sim_person',{n:this.simPerson+1}),route:[]});this.render();};
     root.getElementById('sim-draw').onclick=()=>{this.mode='simulation';this.message=this.t('sim_draw_hint');this.render();};
     root.getElementById('sim-pause').onclick=()=>{simRoute().push({...simRoute().at(-1),seconds:10});this.render();};
@@ -476,11 +475,12 @@ class RadarOccupancyCard extends HTMLElement {
     const simTargets=(data.simulation?.targets||[]).filter(t=>t.floor===floor);
     const simulationMarkers=simTargets.map(t=>{const p=convert&&convert(...t.map);return p?`<circle data-sim-person="${escapeHtml(t.person)}" cx="${p[0]}" cy="${p[1]}" r="${info.width/70}" fill="${escapeHtml(t.color)}" stroke="white" stroke-width="3" vector-effect="non-scaling-stroke"/>`:'';}).join('');
     const simulationLabels=simTargets.map(t=>{const p=convert&&displayPoint(convert(...t.map));return p?`<text x="${p[0]+info.width/50}" y="${p[1]}" fill="${escapeHtml(t.color)}" stroke="white" stroke-width="3" paint-order="stroke" font-size="${info.width/42}">${escapeHtml(t.person)}</text>`:'';}).join('');
-    const simulationPaths=this.simPersons.map((person,i)=>{
+    const planned=data.simulation?.routes?.length&&(data.simulation.running||this.simAuto)?data.simulation.routes:this.simPersons.map((p,i)=>({id:p.id,color:SIM_COLORS[i],points:p.route.map(point=>{const sensor=data.sensors.find(s=>s.id===point.room);return sensor?{floor:sensor.floor,map:[point.x,point.y]}:null;})}));
+    const simulationPaths=planned.map(person=>{
       let previous=null,result='';
-      for(const point of person.route){const sensor=data.sensors.find(s=>s.id===point.room);const p=sensor?.floor===floor&&convert?convert(point.x,point.y):null;
-        if(p&&previous)result+=`<line x1="${previous[0]}" y1="${previous[1]}" x2="${p[0]}" y2="${p[1]}" stroke="${SIM_COLORS[i]}" stroke-width="3" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`;
-        if(p)result+=`<circle cx="${p[0]}" cy="${p[1]}" r="${info.width/180}" fill="${SIM_COLORS[i]}"/>`;
+      for(const point of person.points){const p=point?.floor===floor&&convert?convert(...point.map):null;
+        if(p&&previous)result+=`<line x1="${previous[0]}" y1="${previous[1]}" x2="${p[0]}" y2="${p[1]}" stroke="${escapeHtml(person.color)}" stroke-width="3" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`;
+        if(p)result+=`<circle cx="${p[0]}" cy="${p[1]}" r="${info.width/180}" fill="${escapeHtml(person.color)}"/>`;
         previous=p;
       }return result;
     }).join('');

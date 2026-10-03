@@ -86,6 +86,8 @@ class SimulationSession:
         self.stopping = False
         self._stop_lock = asyncio.Lock()
         self.error = None
+        self.warnings = []
+        self.automatic = False
         if live_lights:
             self.sandbox.hass = manager.hass
             self.sandbox.lights = LiveLights(self.sandbox, self, ignore_restrictions)
@@ -238,10 +240,20 @@ class SimulationSession:
     def snapshot(self):
         return {
             "running": self.running,
+            "automatic": self.automatic,
             "live_lights": self.live_lights,
             "elapsed": round(max(0, dt_util.utcnow().timestamp() - self.started), 1),
             "duration": self.duration,
             "targets": deepcopy(self.targets),
+            "routes": [
+                {
+                    "id": p["id"],
+                    "color": p["color"],
+                    "points": [{"floor": v[0], "map": v[1]} if v else None for _, v in p["path"]],
+                }
+                for p in self.paths
+            ],
+            "warnings": self.warnings,
             "people": dict(self.sandbox.home.tracking.counts),
             "lights": self.sandbox.lights.snapshot(),
             "unavailable_lights": self.unavailable,

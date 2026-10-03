@@ -362,8 +362,14 @@ map data is shipped in this public repository.
 
 ### Animated people and real light test / Animierte Personen und Lichttest
 
-On the position card, open **Simulation**. Select a person and **Draw path on
-map**, then tap waypoints along the rooms and doors. Add people to give each
+On the position card, open **Simulation**. **Generate paths automatically**
+is enabled by default: choose **People** (1–8) and **Duration**, then start.
+Each person gets different starting positions, destinations, speeds and pauses.
+Paths follow known doors and calibrated outlines, including concave rooms.
+Disconnected floor maps receive separate walkers; no stair connection is invented.
+The selected room is the first person's preferred start. For manual paths,
+disable automatic generation, select a person and **Draw path on map**, then tap
+waypoints along the rooms and doors. Add people to give each
 one an independent route and color. **Wait 10 s** repeats the last position;
 **Lose target · 60 s** creates a radar dropout. Up to eight people run at once.
 Positions interpolate between waypoints at walking speed. All people start
@@ -421,3 +427,32 @@ position creates a pause. Each person is bounded to 30 waypoints, each taking
 0.5–120 seconds. Floor changes use the configured exits and doors; there is no
 interpolation between separate floor maps. These animation actions run in real
 time; the instant `simulate` action runs compressed virtual time.
+
+
+### Automatische unabhängige Rundgänge
+
+**Simulation → Wege automatisch erstellen** ist voreingestellt. Nur
+**Personen** und **Dauer** wählen und **Simulation starten** drücken.
+Jede Person bekommt einen unabhängigen Weg mit eigenen Zielen, Gehgeschwindigkeit
+und Pausen. Der Knopf **Rundgang simulieren** startet mit diesen Einstellungen.
+Die Wege führen durch die bekannten Türen, auch um Ecken in verwinkelten Räumen.
+Unverbundene Räume bzw. Stockwerkskarten erhalten getrennte Startpositionen;
+fehlende Türverbindungen werden nicht durch Wege durch Wände ersetzt.
+**Echte Lichter steuern** bleibt als Option für den realen Lichttest verfügbar.
+
+```yaml
+action: radar_occupancy.start_simulation
+data:
+  automatic: true
+  count: 3
+  duration: 180
+  live_lights: true
+  ignore_restrictions: true
+```
+
+Optional: `room` für den Start der ersten Person und `seed` für wiederholbare
+Wege bei gleicher Konfiguration. Automatische Wege werden für 30–900 Sekunden
+erzeugt und können mehr Wegpunkte als handgezeichnete Wege haben. Die farbigen
+Wege erscheinen direkt auf der Karte. Eigene Wege bleiben über das Abschalten
+der automatischen Erstellung verfügbar. **Stoppen** beendet den Test und
+stellt bei aktivem Lichttest die vorherigen Lampenzustände wieder her.

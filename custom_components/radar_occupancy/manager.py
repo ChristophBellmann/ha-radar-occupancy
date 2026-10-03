@@ -274,6 +274,7 @@ class RadarOccupancyManager:
         self._watching: set[str] = set()
         self._ticks = 0
         self.simulation = None
+        self._simulation_starting = False
         self.simulation_result = {}
 
     @property

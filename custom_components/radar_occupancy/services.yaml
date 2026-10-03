@@ -177,10 +177,39 @@ start_simulation:
   description: Animate up to eight people on the map. Real light control is optional; restores previous light states when stopped. Real radar inputs and occupancy are unchanged.
   fields:
     persons:
-      required: true
+      required: false
       description: List of people with unique id and route. Each waypoint has room, map x/y in mm and seconds. Positions interpolate between waypoints. Omit room for a radar dropout.
       selector:
         object:
+    automatic:
+      description: Generate independent walks through mapped rooms and known doorways.
+      selector:
+        boolean:
+    count:
+      description: Number of independently walking people (1–8).
+      selector:
+        number:
+          min: 1
+          max: 8
+          mode: box
+    duration:
+      description: Automatic walk duration in seconds (30–900).
+      selector:
+        number:
+          min: 30
+          max: 900
+          mode: box
+    room:
+      description: Preferred starting room for the first person; other people are spread across available map components.
+      selector:
+        text:
+    seed:
+      description: Optional number for repeatable automatic routes with the same maps.
+      selector:
+        number:
+          min: 0
+          max: 2147483647
+          mode: box
     live_lights:
       description: Take over mapped lights during the test. Light automation must be enabled. Stop restores the previous light states.
       selector:

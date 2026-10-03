@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from functools import partial
 from pathlib import Path
 
 import voluptuous as vol
@@ -286,18 +287,44 @@ def _register_services(hass: HomeAssistant) -> None:
         manager = get_manager(hass)
         if manager.simulation:
             raise HomeAssistantError("Stop the current simulation before starting another.")
-        session = SimulationSession(
-            manager,
-            call.data["persons"],
-            live_lights=call.data["live_lights"],
-            ignore_restrictions=call.data["ignore_restrictions"],
-        )
-        manager.simulation = session
+        if manager._simulation_starting:
+            raise HomeAssistantError("An automatic walk is already being prepared.")
+        manager._simulation_starting = True
         try:
-            await session.start()
-        except Exception:
-            manager.simulation = None
-            raise
+            persons = call.data.get("persons")
+            if call.data["automatic"] or not persons:
+                from .simulation_routes import automatic_routes, planning_snapshot
+
+                snapshot, preferred = planning_snapshot(manager, call.data.get("room"))
+                generated = await hass.async_add_executor_job(
+                    partial(
+                        automatic_routes,
+                        snapshot,
+                        call.data["count"],
+                        call.data["duration"],
+                        seed=call.data.get("seed"),
+                        start_room=preferred,
+                    )
+                )
+                persons = generated["persons"]
+            else:
+                generated = {}
+            session = SimulationSession(
+                manager,
+                persons,
+                live_lights=call.data["live_lights"],
+                ignore_restrictions=call.data["ignore_restrictions"],
+            )
+            session.warnings = generated.get("warnings", [])
+            session.automatic = bool(generated)
+            manager.simulation = session
+            try:
+                await session.start()
+            except Exception:
+                manager.simulation = None
+                raise
+        finally:
+            manager._simulation_starting = False
 
     async def stop_simulation(call: ServiceCall) -> None:
         manager = get_manager(hass)
@@ -310,7 +337,7 @@ def _register_services(hass: HomeAssistant) -> None:
         start_simulation,
         schema=vol.Schema(
             {
-                vol.Required("persons"): vol.All(
+                vol.Optional("persons"): vol.All(
                     [
                         vol.Schema(
                             {
@@ -321,6 +348,11 @@ def _register_services(hass: HomeAssistant) -> None:
                     ],
                     vol.Length(min=1, max=8),
                 ),
+                vol.Optional("automatic", default=False): cv.boolean,
+                vol.Optional("count", default=2): vol.All(vol.Coerce(int), vol.Range(min=1, max=8)),
+                vol.Optional("duration", default=180): vol.All(vol.Coerce(int), vol.Range(min=30, max=900)),
+                vol.Optional("seed"): vol.All(vol.Coerce(int), vol.Range(min=0, max=2147483647)),
+                vol.Optional("room"): cv.string,
                 vol.Optional("live_lights", default=False): cv.boolean,
                 vol.Optional("ignore_restrictions", default=False): cv.boolean,
             }
