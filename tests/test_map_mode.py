@@ -348,6 +348,15 @@ async def test_other_automation_is_not_by_hand(hass: HomeAssistant, flat: Flat, 
     await hass.services.async_call("light", "turn_off", {"entity_id": "light.bed"}, blocking=True, context=automation)
     await flat.tick(1)
     assert hass.states.get("binary_sensor.bedroom").attributes["light_mode"] == "auto"
+    # Brightness chosen by another automation is not remembered; by hand it is.
+    await hass.services.async_call(
+        "light", "turn_on", {"entity_id": "light.bed", "brightness": 200}, blocking=True, context=automation
+    )
+    assert "light.bed" not in hass.data[DOMAIN].lights.brightness
+    await hass.services.async_call(
+        "light", "turn_on", {"entity_id": "light.bed", "brightness": 90}, blocking=True, context=Context(user_id="u")
+    )
+    assert hass.data[DOMAIN].lights.brightness["light.bed"] == 90
 
 
 async def test_light_automation_switch(hass: HomeAssistant, flat: Flat, monkeypatch) -> None:

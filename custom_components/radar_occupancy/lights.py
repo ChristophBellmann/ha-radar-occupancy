@@ -452,8 +452,15 @@ class LightController:
         own = now - self.last_command.get(entity_id, -1e9) < const.OWN_ECHO or (
             ctx is not None and (ctx.id in self.contexts or ctx.parent_id in self.contexts)
         )
+        automation = ctx is not None and ctx.parent_id is not None and ctx.user_id is None
         brightness = new.attributes.get("brightness")
-        if new.state == STATE_ON and not own and brightness and self.brightness.get(entity_id) != brightness:
+        if (
+            new.state == STATE_ON
+            and not own
+            and not automation
+            and brightness
+            and self.brightness.get(entity_id) != brightness
+        ):
             self.brightness[entity_id] = brightness
             self.manager.save()
         st = self.state.get(entity_id)
@@ -469,7 +476,7 @@ class LightController:
         if not self.active() or own:
             self.save()
             return
-        if ctx is not None and ctx.parent_id is not None and ctx.user_id is None:
+        if automation:
             self.save()
             return  # another automation, not by hand
         if new.state == STATE_OFF:
