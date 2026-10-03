@@ -431,6 +431,13 @@ class RadarOccupancyCard extends HTMLElement {
     if(!sensor.available)return this.t('status_offline');
     if(!sensor.calibrated)return this.t('status_calibrate');
     if(sensor.map_ready&&sensor.people!=null) {
+      if(sensor.visible_people!=null) {
+        const n=sensor.visible_people;
+        const live=n===1?this.t('one_person'):this.t('people',{n});
+        const held=sensor.people>n;
+        const state=n?`${live}${held?` · ${this.t('held')}`:''}`:this.t(sensor.people>0?'held':'free');
+        return sensor.light_mode==='manual_off'?`${state} · ${this.t('manual_off')}`:state;
+      }
       const people=sensor.people===0?this.t('free'):sensor.people===1?this.t('one_person'):this.t('people',{n:sensor.people});
       return sensor.light_mode==='manual_off'?`${people} · ${this.t('manual_off')}`:people;
     }

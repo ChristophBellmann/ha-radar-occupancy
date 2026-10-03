@@ -192,7 +192,8 @@ class Presence:
         assignment (sub-areas). hold: rooms whose occupancy is not held."""
         self.last_step = now
         merged = self._merge(observations)
-        self.lost = [d for d in self.lost if now - d["time"] <= REACQUIRE_WINDOW]
+        # Held occupants remain candidates even after a long radar dropout.
+        self.lost = [d for d in self.lost if self.count(d["room"]) > 0]
         alive = [t for t in self.tracks if now - t.seen <= TRACK_TTL]
         pairs = sorted(
             (
@@ -298,13 +299,32 @@ class Presence:
         return best[0] if best else None
 
     def _reacquire(self, track):
+        # An unpaired departure is still held. Reappearing on the same side
+        # cancels it instead of becoming another arrival.
+        departure = next(
+            (
+                d
+                for d in self.deaths
+                if d["room"] == track.room
+                and d["door"].distance(track.floor, track.birth_point) is not None
+                and d["door"].distance(track.floor, track.birth_point) <= DOOR_NEAR
+            ),
+            None,
+        )
+        if departure:
+            self.deaths.remove(departure)
+            track.counted = True
+            return True
         lost = next(
             (
                 item
                 for item in self.lost
                 if item["room"] == track.room
                 and item["floor"] == track.floor
-                and math.dist(item["point"], track.birth_point) <= MERGE
+                and (
+                    math.dist(item["point"], track.birth_point) <= MERGE
+                    or self._door_near(track, track.born, False) is None
+                )
                 and self.count(track.room) > 0
             ),
             None,
@@ -331,16 +351,20 @@ class Presence:
         if paired:
             self.deaths.remove(paired)
             self.transfer(other, track.room, now)
-        elif other == OUTSIDE:
-            self._change(track.room, +1, CAME_IN, now, OUTSIDE, track.room)
         elif self.count(other) and not door.covered_into(other):
             # A sensor cannot see departure from the other side (e.g. the
             # long corridor). Arrival here completes that unseen passage;
             # move its held person instead of adding another on every trip.
             self.transfer(other, track.room, now)
         else:
-            # Nobody was seen leaving on the other side: count here, take nothing off there.
-            self._change(track.room, +1, APPEARED_AT_DOOR, now, other, track.room)
+            # Appearance alone is not proof of another person. Radar targets
+            # have no stable identity; repeated dropouts used to inflate counts.
+            # Simultaneous, separated targets establish the lower bound in step().
+            self.reasons[track.room] = {
+                "code": CAME_IN if other == OUTSIDE else APPEARED_AT_DOOR,
+                "from": other,
+                "to": track.room,
+            }
 
     def _died(self, track, now):
         if not track.counted or track.room is None:
@@ -363,8 +387,12 @@ class Presence:
                 self.deaths.remove(death)
                 self.transfer(death["room"], death["to"], now)
             elif now - death["time"] > PAIR_WINDOW:
-                # The other side should have seen them: probably still in the room.
+                # The other side should have seen them: keep a reacquisition
+                # candidate for the person still held on this side.
                 self.deaths.remove(death)
+                self.lost.append(
+                    {"room": death["room"], "floor": door.floor, "point": door.point, "time": death["time"]}
+                )
 
     def _approach(self, now):
         for track in self.tracks:

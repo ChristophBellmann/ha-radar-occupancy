@@ -196,3 +196,28 @@ class PresenceTests(unittest.TestCase):
         self.run_path(self.walk([1500, 1000], [5000, 1000], 8) + [[5000, 1000]] * 2)
         self.assertEqual(self.p.count("Gang"), 1)
         self.assertNotIn("Schlafzimmer", self.p.approaching)
+
+    def test_long_near_door_dropout_does_not_add_people(self):
+        for _ in range(5):
+            self.run_path([[3700, 1000]] * 6)
+            self.idle(60)
+            self.assertEqual(self.p.count("Schlafzimmer"), 1)
+
+    def test_unpaired_departure_reappears_on_same_side(self):
+        for _ in range(4):
+            self.run_path([[2000, 1000]] * 4 + self.walk([2000, 1000], [3700, 1000], 6))
+            self.idle(4)
+            self.run_path([[3700, 1000]] * 4)
+            self.assertEqual(self.p.count("Schlafzimmer"), 1)
+            self.assertEqual(len(self.p.deaths), 0)
+
+    def test_expired_departure_reappears_after_a_minute(self):
+        for _ in range(4):
+            self.run_path([[2000, 1000]] * 4 + self.walk([2000, 1000], [3700, 1000], 6))
+            self.idle(60)
+            self.run_path([[3700, 1000]] * 4)
+            self.assertEqual(self.p.count("Schlafzimmer"), 1)
+
+    def test_two_simultaneous_people_at_door_are_still_counted(self):
+        self.run_path([[3700, 1000]] * 10, extra=[[2500, 2500]])
+        self.assertEqual(self.p.count("Schlafzimmer"), 2)

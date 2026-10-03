@@ -456,3 +456,21 @@ erzeugt und können mehr Wegpunkte als handgezeichnete Wege haben. Die farbigen
 Wege erscheinen direkt auf der Karte. Eigene Wege bleiben über das Abschalten
 der automatischen Erstellung verfügbar. **Stoppen** beendet den Test und
 stellt bei aktivem Lichttest die vorherigen Lampenzustände wieder her.
+
+
+### Detected people and held occupancy / Erkannte Personen und gehaltene Belegung
+
+Room tiles show confirmed, simultaneously visible people. **Held occupancy**
+is shown separately: a radar dropout cannot establish how many people remain
+in the room. The overview sensor counts only currently detected people.
+Lights still respect held occupancy. Repeated target appearances without a
+confirmed door passage do not add people. Version 0.3.5 cleans up earlier
+inflated stored counts once, retaining occupancy for each affected room.
+
+Raumkacheln zeigen bestätigte, gleichzeitig sichtbare Personen. **Belegung
+gehalten** steht separat: Nach einem Radaraussetzer ist nicht bekannt, wie
+viele Personen noch im Raum sind. Der Lagebild-Sensor zählt nur aktuell
+Erkannte. Für das Licht bleibt die gehaltene Belegung erhalten. Wieder
+auftauchende Ziele ohne bestätigten Türdurchgang erhöhen den Zähler nicht.
+Version 0.3.5 bereinigt einmalig alte aufgeblähte Zähler und hält die betroffenen
+Räume weiterhin belegt. Langdruck löst eine falsche Belegung wie bisher.

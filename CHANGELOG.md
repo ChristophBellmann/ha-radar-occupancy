@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.5
+
+- Fix additive phantom people after repeated or long radar dropouts at doors.
+  Reappearance on the same side cancels pending departures; unpaired target
+  appearances no longer add another person. Distinct simultaneous targets
+  and confirmed door transfers still support multiple people.
+- Room tiles distinguish currently detected people from held occupancy. The
+  overview sensor reports currently confirmed visible people, not old held
+  estimates. Holding a room still keeps its light occupied.
+- One-time migration removes inflated legacy headcounts while preserving each
+  occupied room as held. Fresh observations establish multiple people again.
+
 ## 0.3.4
 
 - Automatic multi-person walks: choose the number of people and duration,

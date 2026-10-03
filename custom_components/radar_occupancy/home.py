@@ -130,6 +130,13 @@ class Home:
         data = manager.saved.setdefault("map", {})
         for key in ("calibrations", "floors", "exits", "doors", "people"):
             data.setdefault(key, {})
+        if data.get("counting_version", 1) < 2:
+            # Old additive arrival counts can contain arbitrarily many ghosts.
+            # Preserve occupancy, not an unsupported headcount; live simultaneous
+            # observations will establish multiple people again.
+            data["people"] = {room: int(count > 0) for room, count in data["people"].items()}
+            data["counting_version"] = 2
+            manager.save()
         self.data = data
         self.floors: dict[str, dict[str, Any]] = {}
         self.errors: dict[str, str] = {}
@@ -534,6 +541,9 @@ class Home:
             item.update(
                 occupied=room.occupied,
                 people=self.people(room_id) if room_id in self.ready else None,
+                visible_people=self.tracking.visible(room_id, self.tracking.last_step)
+                if room_id in self.ready and self.tracking.last_step is not None
+                else 0,
                 occupancy_reason=room.reason,
                 occupancy_reason_rooms=self.reason_rooms(room_id) if room_id in self.ready else None,
                 hold_enabled=room.room.hold,
@@ -576,7 +586,8 @@ class Home:
         return labels
 
     def total_people(self) -> int:
-        return sum(self.tracking.count(rid) for rid in self.ready)
+        now = self.tracking.last_step
+        return sum(self.tracking.visible(rid, now) for rid in self.ready) if now is not None else 0
 
     # Calibration services --------------------------------------------------
 

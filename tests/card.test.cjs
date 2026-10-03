@@ -390,3 +390,13 @@ console.log('Karte registriert sich neben einer alten Positionskarte.');
   assert.ok(overlay.includes('x="866.6666666666666" y="150"'),'Simulated labels must stay upright on the flipped map');
   console.log('Animation: mehrere farbige Personen, reale Lichtoption, Projektion und Fehlerbehandlung geprüft.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
+
+{
+  const c = new Card();
+  c._hass = {language:'de'};
+  const room = {available:true,calibrated:true,map_ready:true,zone:'lost'};
+  assert.equal(c.roomStatus({...room,people:14,visible_people:0}),'Belegung gehalten');
+  assert.equal(c.roomStatus({...room,people:14,visible_people:1}),'1 Person · Belegung gehalten');
+  assert.equal(c.roomStatus({...room,people:2,visible_people:2}),'2 Personen');
+  assert.equal(c.roomStatus({...room,people:0,visible_people:0}),'Frei');
+}

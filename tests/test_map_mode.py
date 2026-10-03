@@ -265,9 +265,10 @@ async def test_overview_release_and_hold(hass: HomeAssistant, flat: Flat, monkey
     await flat.walk([[1000, 3000]] * 4)
     await flat.idle(5)
     overview = hass.states.get("sensor.flat_overview")
-    assert overview.state == "1"
+    assert overview.state == "0"  # No live target; occupancy is held separately.
     sensors = {s["room"]: s for s in overview.attributes["sensors"]}
     assert sensors["Bedroom"]["map_ready"] and sensors["Bedroom"]["people"] == 1
+    assert sensors["Bedroom"]["visible_people"] == 0
     assert sensors["Bedroom"]["entities"]["hold"] == "switch.bedroom_hold_occupancy"
     doors = {(d["a"], d["b"]) for d in overview.attributes["doors"]}
     assert ("Hall", "outside") in doors and ("Bedroom", "Hall") in doors
@@ -427,3 +428,17 @@ async def test_fade_in_steps_and_fade_out_never_switches_on(hass: HomeAssistant,
     await hass.async_block_till_done(wait_background_tasks=True)
     assert not [c for c in calls if c[0] == "on" and c[1]["entity_id"] == "light.bed_2"]
     assert ("off", {"entity_id": "light.bed"}) in calls
+
+
+def test_legacy_ghost_counts_migrate_once_preserving_occupancy():
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    manager = SimpleNamespace(hass=None, saved={"map": {"people": {"hall": 14, "bed": 2, "bath": 0}}}, save=Mock())
+    home = home_module.Home(manager, SimpleNamespace(entry_id="home"))
+    assert home.tracking.counts == {"hall": 1, "bed": 1, "bath": 0}
+    manager.save.assert_called_once()
+    manager.saved["map"]["people"]["bed"] = 2
+    home = home_module.Home(manager, SimpleNamespace(entry_id="home"))
+    assert home.people("bed") == 2
+    manager.save.assert_called_once()
