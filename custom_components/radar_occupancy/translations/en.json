@@ -3,6 +3,7 @@
     "step": {
       "user": {
         "title": "Radar Occupancy",
+        "description": "What do you want to add?",
         "menu_options": {
           "room": "Room with a radar sensor",
           "area": "Sub-area of a room (e.g. balcony)"
@@ -77,21 +78,39 @@
   },
   "entity": {
     "button": {
-      "release": { "name": "Release" },
-      "learn_door": { "name": "Learn door from last exit" }
+      "release": {
+        "name": "Release"
+      },
+      "learn_door": {
+        "name": "Learn door from last exit"
+      }
     },
     "sensor": {
-      "last_distance": { "name": "Last seen distance" }
+      "last_distance": {
+        "name": "Last seen distance"
+      }
     },
     "switch": {
-      "auto_light": { "name": "Automatic light" },
-      "only_dark": { "name": "Only when dark" },
-      "hold": { "name": "Hold occupancy" }
+      "auto_light": {
+        "name": "Automatic light"
+      },
+      "only_dark": {
+        "name": "Only when dark"
+      },
+      "hold": {
+        "name": "Hold occupancy"
+      }
     }
   },
   "exceptions": {
-    "target_present": { "message": "A target is present; only a held occupancy can be released." },
-    "leave_first": { "message": "Walk out through the door first, then press." },
-    "no_distance": { "message": "No distance seen yet; a distance entity is required." }
+    "target_present": {
+      "message": "A target is present; only a held occupancy can be released."
+    },
+    "leave_first": {
+      "message": "Walk out through the door first, then press."
+    },
+    "no_distance": {
+      "message": "No distance seen yet; a distance entity is required."
+    }
   }
 }

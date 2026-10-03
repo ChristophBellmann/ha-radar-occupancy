@@ -3,6 +3,7 @@
     "step": {
       "user": {
         "title": "Radar-Raumbelegung",
+        "description": "Was möchtest du hinzufügen?",
         "menu_options": {
           "room": "Raum mit Radarsensor",
           "area": "Teilbereich eines Raums (z. B. Balkon)"
@@ -77,21 +78,39 @@
   },
   "entity": {
     "button": {
-      "release": { "name": "Freigeben" },
-      "learn_door": { "name": "Türbereich vom letzten Verlassen lernen" }
+      "release": {
+        "name": "Freigeben"
+      },
+      "learn_door": {
+        "name": "Türbereich vom letzten Verlassen lernen"
+      }
     },
     "sensor": {
-      "last_distance": { "name": "Zuletzt gesehen in" }
+      "last_distance": {
+        "name": "Zuletzt gesehen in"
+      }
     },
     "switch": {
-      "auto_light": { "name": "Licht automatisch" },
-      "only_dark": { "name": "Nur bei Dunkelheit" },
-      "hold": { "name": "Belegung halten" }
+      "auto_light": {
+        "name": "Licht automatisch"
+      },
+      "only_dark": {
+        "name": "Nur bei Dunkelheit"
+      },
+      "hold": {
+        "name": "Belegung halten"
+      }
     }
   },
   "exceptions": {
-    "target_present": { "message": "Ein Ziel ist sichtbar; nur eine gehaltene Belegung lässt sich freigeben." },
-    "leave_first": { "message": "Zuerst durch die Tür hinausgehen, dann drücken." },
-    "no_distance": { "message": "Noch keine Entfernung gesehen; dafür ist eine Entfernungs-Entität nötig." }
+    "target_present": {
+      "message": "Ein Ziel ist sichtbar; nur eine gehaltene Belegung lässt sich freigeben."
+    },
+    "leave_first": {
+      "message": "Zuerst durch die Tür hinausgehen, dann drücken."
+    },
+    "no_distance": {
+      "message": "Noch keine Entfernung gesehen; dafür ist eine Entfernungs-Entität nötig."
+    }
   }
 }
