@@ -6,15 +6,18 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity
 
-from .const import DOMAIN, SIGNAL_UPDATE
+from .const import CONF_KIND, DOMAIN, KIND_AREA, KIND_HOME, SIGNAL_HOME, SIGNAL_UPDATE
+from .home import Home
 from .manager import Target
+
+MODELS = {KIND_AREA: "Area", KIND_HOME: "Home"}
 
 
 class RadarOccupancyEntity(Entity):
     _attr_has_entity_name = True
     _attr_should_poll = False
 
-    def __init__(self, target: Target, key: str) -> None:
+    def __init__(self, target: Target | Home, key: str) -> None:
         self.target = target
         self._attr_translation_key = key
         self._attr_unique_id = f"{target.entry_id}_{key}"
@@ -22,13 +25,12 @@ class RadarOccupancyEntity(Entity):
             identifiers={(DOMAIN, target.entry_id)},
             name=target.entry.title,
             manufacturer="Radar Occupancy",
-            model="Area" if target.entry.data.get("kind") == "area" else "Room",
+            model=MODELS.get(target.entry.data.get(CONF_KIND), "Room"),
         )
 
     async def async_added_to_hass(self) -> None:
-        self.async_on_remove(
-            async_dispatcher_connect(self.hass, SIGNAL_UPDATE.format(self.target.entry_id), self.async_write_ha_state)
-        )
+        signal = SIGNAL_HOME if isinstance(self.target, Home) else SIGNAL_UPDATE.format(self.target.entry_id)
+        self.async_on_remove(async_dispatcher_connect(self.hass, signal, self.async_write_ha_state))
 
     @property
     def manager(self):

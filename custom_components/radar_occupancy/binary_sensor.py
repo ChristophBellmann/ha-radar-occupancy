@@ -27,13 +27,19 @@ class OccupancySensor(RadarOccupancyEntity, BinarySensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        attrs: dict[str, Any] = {"light_owned": self.target.owned}
-        if isinstance(self.target, RoomTarget):
-            room = self.target.room
+        target = self.target
+        attrs: dict[str, Any] = {"light_owned": target.owned, "mode": "map" if target.on_map else "distance"}
+        if target.on_map:
+            attrs["people"] = target.people
+            attrs["reason"] = target.reason
+        if isinstance(target, RoomTarget):
+            room = target.room
             attrs.update(
-                reason=room.reason,
+                reason=target.reason,
                 last_distance=room.last_distance,
                 last_x=room.last_x,
                 last_y=room.last_y,
             )
+        if target.light:
+            attrs["light_mode"] = self.manager.lights.mode(target.light)
         return attrs

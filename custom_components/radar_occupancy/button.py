@@ -22,6 +22,8 @@ class ReleaseButton(RadarOccupancyEntity, ButtonEntity):
     async def async_press(self) -> None:
         if not self.target.room.release():
             raise HomeAssistantError(translation_domain=DOMAIN, translation_key="target_present")
+        if self.manager.home:
+            self.manager.home.release(self.target.entry_id)
         self.manager.notify(self.target)
         self.manager.evaluate()
 

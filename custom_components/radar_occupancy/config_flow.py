@@ -11,32 +11,45 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector as sel
 
 from .const import (
+    CONF_APPROACH_BRIGHTNESS,
     CONF_BRIGHTNESS,
     CONF_DISTANCE,
     CONF_DOOR_FROM,
+    CONF_DOOR_ROOMS,
     CONF_DOOR_TO,
     CONF_HANDOVER,
     CONF_HANDOVER_ANYWHERE,
     CONF_KIND,
     CONF_LIGHT,
+    CONF_MANUAL_OFF_RESET,
+    CONF_MAP_CAMERA,
+    CONF_MAP_ROOM,
     CONF_PARENT,
     CONF_PRESENCE,
+    CONF_REMEMBER_BRIGHTNESS,
     CONF_RUN_ON,
     CONF_SAFETY_TIMEOUT,
     CONF_TAKEOVER_MIN,
     CONF_WINDOW_END,
     CONF_WINDOW_START,
     CONF_X,
+    CONF_X2,
+    CONF_X3,
     CONF_X_MAX,
     CONF_X_MIN,
     CONF_Y,
+    CONF_Y2,
+    CONF_Y3,
     CONF_Y_MAX,
     CONF_Y_MIN,
     DEFAULTS,
     DOMAIN,
+    HOME_DEFAULTS,
     KIND_AREA,
+    KIND_HOME,
     KIND_ROOM,
 )
+from .maps import map_rooms
 
 
 def _mm(maximum: int = 10000, minimum: int = 0, step: int = 50) -> sel.NumberSelector:
@@ -82,6 +95,34 @@ def room_inputs(values: dict[str, Any]) -> dict:
     }
 
 
+def _names(options: list[str]) -> sel.SelectSelector:
+    return sel.SelectSelector(sel.SelectSelectorConfig(options=options, custom_value=True, sort=True))
+
+
+def room_map(hass, values: dict[str, Any]) -> dict:
+    """Map mode: further targets, robot map and the room on it, real doors."""
+    segments = map_rooms(hass, values.get(CONF_MAP_CAMERA))
+    return {
+        _optional(CONF_X2, values): _entity("sensor"),
+        _optional(CONF_Y2, values): _entity("sensor"),
+        _optional(CONF_X3, values): _entity("sensor"),
+        _optional(CONF_Y3, values): _entity("sensor"),
+        _optional(CONF_MAP_CAMERA, values): _entity("camera"),
+        _optional(CONF_MAP_ROOM, values): _names(segments),
+        vol.Optional(CONF_DOOR_ROOMS, default=list(values.get(CONF_DOOR_ROOMS) or [])): sel.SelectSelector(
+            sel.SelectSelectorConfig(options=segments, custom_value=True, multiple=True, sort=True)
+        ),
+    }
+
+
+def home_settings(values: dict[str, Any]) -> dict:
+    values = {**HOME_DEFAULTS, **values}
+    return {
+        _default(CONF_MANUAL_OFF_RESET, values): _number(0, 1440, "min"),
+        _default(CONF_APPROACH_BRIGHTNESS, values): _number(1, 100, "%"),
+    }
+
+
 def room_behaviour(values: dict[str, Any]) -> dict:
     return {
         _default(CONF_DOOR_FROM, values): _mm(),
@@ -109,6 +150,7 @@ def light_settings(values: dict[str, Any]) -> dict:
         _default(CONF_RUN_ON, values): _number(0, 3600, "s"),
         _default(CONF_WINDOW_START, values): sel.TimeSelector(),
         _default(CONF_WINDOW_END, values): sel.TimeSelector(),
+        _default(CONF_REMEMBER_BRIGHTNESS, values): sel.BooleanSelector(),
     }
 
 
@@ -133,7 +175,20 @@ class RadarOccupancyConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         options = ["room", "area"] if self._rooms() else ["room"]
+        if not any(e.data.get(CONF_KIND) == KIND_HOME for e in self._async_current_entries()):
+            options.append("home")
         return self.async_show_menu(step_id="user", menu_options=options)
+
+    async def async_step_home(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if user_input is not None:
+            await self.async_set_unique_id(KIND_HOME)
+            self._abort_if_unique_id_configured()
+            name = user_input.pop(CONF_NAME)
+            return self.async_create_entry(
+                title=name, data={CONF_KIND: KIND_HOME}, options={**HOME_DEFAULTS, **user_input}
+            )
+        schema = vol.Schema({vol.Required(CONF_NAME): sel.TextSelector()})
+        return self.async_show_form(step_id="home", data_schema=schema)
 
     async def async_step_room(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
@@ -174,6 +229,10 @@ class RadarOccupancyOptionsFlow(OptionsFlow):
         values = {**DEFAULTS, **entry.options}
         errors: dict[str, str] = {}
         is_area = entry.data.get(CONF_KIND) == KIND_AREA
+        if entry.data.get(CONF_KIND) == KIND_HOME:
+            if user_input is not None:
+                return self.async_create_entry(data=user_input)
+            return self.async_show_form(step_id="home", data_schema=vol.Schema(home_settings(values)))
         if user_input is not None:
             if not is_area or _box_valid(user_input):
                 keep = {CONF_PARENT: entry.options[CONF_PARENT]} if is_area else {}
@@ -183,5 +242,12 @@ class RadarOccupancyOptionsFlow(OptionsFlow):
         if is_area:
             schema = vol.Schema({**area_box(values), **light_settings(values)})
         else:
-            schema = vol.Schema({**room_inputs(values), **room_behaviour(values), **light_settings(values)})
+            schema = vol.Schema(
+                {
+                    **room_inputs(values),
+                    **room_behaviour(values),
+                    **room_map(self.hass, values),
+                    **light_settings(values),
+                }
+            )
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)

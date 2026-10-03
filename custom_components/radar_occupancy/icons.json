@@ -4,13 +4,34 @@
       "release": { "default": "mdi:account-arrow-right" },
       "learn_door": { "default": "mdi:door-open" }
     },
+    "number": {
+      "fade_in": { "default": "mdi:brightness-auto" },
+      "fade_out": { "default": "mdi:brightness-4" }
+    },
     "sensor": {
-      "last_distance": { "default": "mdi:map-marker-distance" }
+      "last_distance": { "default": "mdi:map-marker-distance" },
+      "overview": { "default": "mdi:home-account" }
     },
     "switch": {
       "auto_light": { "default": "mdi:lightbulb-auto" },
       "only_dark": { "default": "mdi:weather-night" },
-      "hold": { "default": "mdi:account-lock" }
+      "hold": { "default": "mdi:account-lock" },
+      "light_automation": { "default": "mdi:lightbulb-auto-outline" },
+      "map_mode": { "default": "mdi:floor-plan" }
     }
+  },
+  "services": {
+    "sample": { "service": "mdi:map-marker-plus" },
+    "undo_sample": { "service": "mdi:map-marker-minus" },
+    "sample_area": { "service": "mdi:map-marker-radius" },
+    "set_location": { "service": "mdi:map-marker" },
+    "set_orientation": { "service": "mdi:rotate-right" },
+    "set_boundary": { "service": "mdi:vector-polygon" },
+    "reset_calibration": { "service": "mdi:map-marker-off" },
+    "set_calibration": { "service": "mdi:database-import" },
+    "set_exit": { "service": "mdi:exit-run" },
+    "set_floor": { "service": "mdi:layers" },
+    "refresh_maps": { "service": "mdi:map-search" },
+    "release": { "service": "mdi:account-arrow-right" }
   }
 }

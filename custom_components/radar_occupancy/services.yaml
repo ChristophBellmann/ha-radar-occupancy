@@ -1,0 +1,129 @@
+sample:
+  fields:
+    room: &room
+      required: true
+      selector:
+        text:
+    x: &coord
+      required: true
+      selector:
+        number:
+          min: -100000
+          max: 100000
+          mode: box
+          unit_of_measurement: mm
+    y: *coord
+undo_sample:
+  fields:
+    room: *room
+sample_area:
+  fields:
+    room: *room
+    sample:
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 12
+          mode: box
+    area:
+      required: true
+      selector:
+        select:
+          options:
+            - room
+            - sub_area
+set_location:
+  fields:
+    room: *room
+    x: *coord
+    y: *coord
+set_orientation:
+  fields:
+    room: *room
+    heading:
+      selector:
+        number:
+          min: 0
+          max: 360
+          step: 0.5
+          unit_of_measurement: °
+    mirrored:
+      selector:
+        boolean:
+    mount:
+      selector:
+        select:
+          options:
+            - wall
+            - ceiling
+    height:
+      selector:
+        number:
+          min: 1500
+          max: 5000
+          step: 50
+          unit_of_measurement: mm
+    clear:
+      selector:
+        boolean:
+set_boundary:
+  fields:
+    room: *room
+    points:
+      required: true
+      selector:
+        object:
+    kind:
+      selector:
+        select:
+          options:
+            - room
+            - approach
+reset_calibration:
+  fields:
+    room: *room
+set_calibration:
+  fields:
+    room: *room
+    calibration:
+      required: true
+      selector:
+        object:
+set_exit:
+  fields:
+    room: *room
+    x:
+      selector:
+        number:
+          min: -100000
+          max: 100000
+          mode: box
+          unit_of_measurement: mm
+    y:
+      selector:
+        number:
+          min: -100000
+          max: 100000
+          mode: box
+          unit_of_measurement: mm
+    clear:
+      selector:
+        boolean:
+set_floor:
+  fields:
+    camera:
+      required: true
+      selector:
+        entity:
+          domain: camera
+    name:
+      selector:
+        text:
+    flip:
+      selector:
+        boolean:
+refresh_maps:
+release:
+  fields:
+    room: *room

@@ -6,7 +6,8 @@
         "description": "What do you want to add?",
         "menu_options": {
           "room": "Room with a radar sensor",
-          "area": "Sub-area of a room (e.g. balcony)"
+          "area": "Sub-area of a room (e.g. balcony)",
+          "home": "Home (map mode, light automation, overview)"
         }
       },
       "room": {
@@ -33,10 +34,20 @@
           "y_max": "Y to",
           "light_entity": "Light"
         }
+      },
+      "home": {
+        "title": "Add home",
+        "description": "One per installation. Holds the master switch of the light automation, map mode with people counting on robot vacuum maps, fade times and the overview for the position card.",
+        "data": {
+          "name": "Name"
+        }
       }
     },
     "error": {
       "invalid_box": "\"From\" must be smaller than \"to\"."
+    },
+    "abort": {
+      "already_configured": "The home is already set up."
     }
   },
   "options": {
@@ -62,13 +73,36 @@
           "brightness": "Brightness",
           "run_on": "Switch off after",
           "window_start": "Time window from",
-          "window_end": "Time window to (same as start = always)"
+          "window_end": "Time window to (same as start = always)",
+          "x2_entity": "X target 2",
+          "y2_entity": "Y target 2",
+          "x3_entity": "X target 3",
+          "y3_entity": "Y target 3",
+          "map_camera": "Robot map (camera)",
+          "map_room": "Room on the map",
+          "door_rooms": "Doors to these map rooms",
+          "remember_brightness": "Last brightness set by hand"
         },
         "data_description": {
           "door_from": "The room is left only if the target disappears in this distance range. 0 to 0 means every disappearance counts as leaving.",
           "handover": "Single-person household only: when this room lost its target and another taking part room sees someone, this room is free.",
           "takeover_min": "Ignore targets of this room's sensor that are closer, e.g. a fixed echo from a door leaf.",
-          "run_on": "Delay after the room became free."
+          "run_on": "Delay after the room became free.",
+          "map_camera": "Map mode: the saved map of this floor (dreame_vacuum camera). Calibrate the sensor on the position card.",
+          "map_room": "The segment of the robot map that is this room.",
+          "door_rooms": "Map rooms reachable through a real door. Empty: every adjacent map room. Map rooms without a radar count as outside.",
+          "remember_brightness": "Fade to the brightness last set by hand instead of the fixed brightness."
+        }
+      },
+      "home": {
+        "title": "Home",
+        "data": {
+          "manual_off_reset": "Switched off by hand ends after the room was empty for",
+          "approach_brightness": "Pre-light when approaching the door"
+        },
+        "data_description": {
+          "manual_off_reset": "A light switched off by hand in an occupied room stays off, also after leaving briefly. 0: only until the next entering.",
+          "approach_brightness": "Share of the target brightness while someone walks towards the room (map mode)."
         }
       }
     },
@@ -88,6 +122,9 @@
     "sensor": {
       "last_distance": {
         "name": "Last seen distance"
+      },
+      "overview": {
+        "name": "Overview"
       }
     },
     "switch": {
@@ -99,6 +136,20 @@
       },
       "hold": {
         "name": "Hold occupancy"
+      },
+      "light_automation": {
+        "name": "Light automation"
+      },
+      "map_mode": {
+        "name": "Map mode"
+      }
+    },
+    "number": {
+      "fade_in": {
+        "name": "Fade in"
+      },
+      "fade_out": {
+        "name": "Fade out"
       }
     }
   },
@@ -111,6 +162,237 @@
     },
     "no_distance": {
       "message": "No distance seen yet; a distance entity is required."
+    },
+    "no_home": {
+      "message": "Set up the home (map mode) first."
+    },
+    "unknown_room": {
+      "message": "Unknown room: {room}"
+    },
+    "exit_point": {
+      "message": "An exit needs X and Y, or clear."
+    },
+    "no_map_camera": {
+      "message": "Choose a robot map for this room first (Configure)."
+    },
+    "map_not_loaded": {
+      "message": "The map is not loaded yet; reload the maps."
+    },
+    "map_replaced": {
+      "message": "The map was replaced. Reset the calibration of this sensor first."
+    },
+    "one_target": {
+      "message": "Exactly one fresh radar target must be visible for a sample. Move a little."
+    },
+    "sample_too_close": {
+      "message": "This sample is only {cm} cm from a stored radar or map point. Move about 1 m and tap your actual position there. Not saved."
+    },
+    "too_many_samples": {
+      "message": "At most twelve samples; reset to start over."
+    },
+    "no_samples": {
+      "message": "No samples to remove."
+    },
+    "no_such_sample": {
+      "message": "This sample is not stored."
+    },
+    "place_first": {
+      "message": "Place the sensor on the current map first."
+    },
+    "calibrate_first": {
+      "message": "Calibrate first, or place and orient the sensor."
+    }
+  },
+  "services": {
+    "sample": {
+      "name": "Add calibration sample",
+      "description": "Pairs the current radar position with your position on the map.",
+      "fields": {
+        "room": {
+          "name": "Room",
+          "description": "Room: entry id or any entity of the room."
+        },
+        "x": {
+          "name": "X",
+          "description": "Map X in mm."
+        },
+        "y": {
+          "name": "Y",
+          "description": "Map Y in mm."
+        }
+      }
+    },
+    "undo_sample": {
+      "name": "Remove last sample",
+      "description": "Removes the last calibration sample of the room.",
+      "fields": {
+        "room": {
+          "name": "Room",
+          "description": "Room: entry id or any entity of the room."
+        }
+      }
+    },
+    "sample_area": {
+      "name": "Assign sample to sub-area",
+      "description": "Keeps a sample as sub-area reference (e.g. balcony) and excludes it from the room fit.",
+      "fields": {
+        "room": {
+          "name": "Room",
+          "description": "Room: entry id or any entity of the room."
+        },
+        "sample": {
+          "name": "Sample",
+          "description": "Number of the sample, from 1."
+        },
+        "area": {
+          "name": "Area",
+          "description": "room or sub_area."
+        }
+      }
+    },
+    "set_location": {
+      "name": "Place sensor",
+      "description": "Mounting position of the sensor on the map.",
+      "fields": {
+        "room": {
+          "name": "Room",
+          "description": "Room: entry id or any entity of the room."
+        },
+        "x": {
+          "name": "X",
+          "description": "Map X in mm."
+        },
+        "y": {
+          "name": "Y",
+          "description": "Map Y in mm."
+        }
+      }
+    },
+    "set_orientation": {
+      "name": "Orient sensor",
+      "description": "Viewing direction (degrees, counter-clockwise from map +X), mirroring and mounting. With the location it gives a true-to-scale transformation that wins over the samples.",
+      "fields": {
+        "room": {
+          "name": "Room",
+          "description": "Room: entry id or any entity of the room."
+        },
+        "heading": {
+          "name": "Heading",
+          "description": "Degrees."
+        },
+        "mirrored": {
+          "name": "Mirrored",
+          "description": "Swap left and right."
+        },
+        "mount": {
+          "name": "Mount",
+          "description": "wall or ceiling."
+        },
+        "height": {
+          "name": "Height",
+          "description": "Mounting height in mm (ceiling)."
+        },
+        "clear": {
+          "name": "Clear",
+          "description": "Remove the orientation; the samples apply again."
+        }
+      }
+    },
+    "set_boundary": {
+      "name": "Set room boundary",
+      "description": "Draw the room outline or the area in front of its door by hand.",
+      "fields": {
+        "room": {
+          "name": "Room",
+          "description": "Room: entry id or any entity of the room."
+        },
+        "points": {
+          "name": "Points",
+          "description": "Corners [[x, y], ...] in map mm."
+        },
+        "kind": {
+          "name": "Kind",
+          "description": "room or approach."
+        }
+      }
+    },
+    "reset_calibration": {
+      "name": "Reset calibration",
+      "description": "Deletes samples, location and boundaries of the room sensor.",
+      "fields": {
+        "room": {
+          "name": "Room",
+          "description": "Room: entry id or any entity of the room."
+        }
+      }
+    },
+    "set_calibration": {
+      "name": "Set calibration",
+      "description": "Restores a complete calibration (backup or import).",
+      "fields": {
+        "room": {
+          "name": "Room",
+          "description": "Room: entry id or any entity of the room."
+        },
+        "calibration": {
+          "name": "Calibration",
+          "description": "map_id, samples, transform, location, heading, mirrored, mount, height, polygon, approach_polygon."
+        }
+      }
+    },
+    "set_exit": {
+      "name": "Set exit",
+      "description": "A way out of the home from this room that the map does not show, e.g. stairs or the front door.",
+      "fields": {
+        "room": {
+          "name": "Room",
+          "description": "Room: entry id or any entity of the room."
+        },
+        "x": {
+          "name": "X",
+          "description": "Map X in mm."
+        },
+        "y": {
+          "name": "Y",
+          "description": "Map Y in mm."
+        },
+        "clear": {
+          "name": "Clear",
+          "description": "Remove all exits of the room."
+        }
+      }
+    },
+    "set_floor": {
+      "name": "Floor settings",
+      "description": "Name of a floor map and whether it is shown upside down.",
+      "fields": {
+        "camera": {
+          "name": "Map camera",
+          "description": "Camera of the floor."
+        },
+        "name": {
+          "name": "Name",
+          "description": "Shown above the map."
+        },
+        "flip": {
+          "name": "Upside down",
+          "description": "Rotate the map by 180°."
+        }
+      }
+    },
+    "refresh_maps": {
+      "name": "Reload maps",
+      "description": "Reloads the saved robot maps."
+    },
+    "release": {
+      "name": "Release room",
+      "description": "Clears a held occupancy once; refused while a target is visible.",
+      "fields": {
+        "room": {
+          "name": "Room",
+          "description": "Room: entry id or any entity of the room."
+        }
+      }
     }
   }
 }

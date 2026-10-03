@@ -11,11 +11,15 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .entity import RadarOccupancyEntity
+from .home import Home
 from .manager import RoomTarget, Target
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEntitiesCallback) -> None:
-    target: Target = entry.runtime_data
+    target: Target | Home = entry.runtime_data
+    if isinstance(target, Home):
+        add([HomeSwitch(target, "light_automation"), HomeSwitch(target, "map_mode")])
+        return
     entities: list[SwitchEntity] = []
     if target.light:
         entities += [FlagSwitch(target, "auto_light"), FlagSwitch(target, "only_dark")]
@@ -38,6 +42,7 @@ class FlagSwitch(RadarOccupancyEntity, SwitchEntity):
     async def _set(self, value: bool) -> None:
         setattr(self.target, self._key, value)
         self.manager.notify(self.target)
+        self.manager.evaluate()
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._set(True)
@@ -63,3 +68,21 @@ class HoldSwitch(RadarOccupancyEntity, SwitchEntity):
         self.target.room.hold = False
         self.manager.notify(self.target)
         self.manager.evaluate()
+
+
+class HomeSwitch(RadarOccupancyEntity, SwitchEntity):
+    """Light automation of the whole home; map mode (off: distance rule only)."""
+
+    def __init__(self, home: Home, key: str) -> None:
+        super().__init__(home, key)
+        self._key = key
+
+    @property
+    def is_on(self) -> bool:
+        return getattr(self.target, self._key)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        self.target.set_setting(self._key, True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        self.target.set_setting(self._key, False)

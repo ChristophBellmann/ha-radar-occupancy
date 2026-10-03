@@ -78,21 +78,63 @@ handover off unless one person lives in the home.
 With a light configured:
 
 - **Entering** an empty room switches the light on (brightness, *Only when
-  dark* via `sun.sun`, time window). A light that was switched off by hand
-  while the room is occupied stays off.
+  dark* via `sun.sun`, time window). *Last brightness set by hand* fades to
+  the brightness you chose last instead of the fixed one.
 - **Leaving**: after the run-on time the light is switched off — also a light
   that was on before someone entered, because whoever entered owns it.
   A light switched on while nobody entered stays on.
+- **Switched off by hand** in an occupied room: the light stays off, also
+  after leaving briefly (to the bathroom at night and back). Switching it on
+  by hand gives it back to the automation; with a home entry it also ends
+  after the room was empty for 30 minutes (configurable). Changes by other
+  automations do not count as "by hand".
 - Rooms sharing a light keep it on while any of them is occupied.
+- With a home entry, lights **fade** in and out in perceptually even steps
+  (CIE L*), at most one command per lamp in flight, so slow cloud lamps get
+  no backlog; lamps with native transitions get one command. Fading out never
+  switches on a lamp of a group that is already off.
 - Lamps that are unreachable drop commands silently. The light is switched off
   up to three times and checked again every five minutes, also after a restart,
   until it really reports off.
+
+## Map mode (optional): people counted through doors
+
+Add *Home* once (*Add integration → Radar Occupancy → Home*). It brings
+
+| Entity | |
+| --- | --- |
+| `switch.<home>_light_automation` | Master switch for all lights |
+| `switch.<home>_map_mode` | Off: every room uses its distance rule |
+| `number.<home>_fade_in`, `number.<home>_fade_out` | Fade times, 0 = switch |
+| `sensor.<home>_overview` | People in the home; attributes feed the position card |
+
+Map mode places every radar target on the saved map of a robot vacuum
+([dreame_vacuum](https://github.com/Tasshack/dreame-vacuum) cameras), fuses
+the targets of all sensors and counts **people per room**. A room becomes free
+only when everybody evidently walked out through a door. Somebody seen in
+another room says nothing about this room, so it works with several people.
+
+Per room (*Configure*): *Robot map* (camera), *Room on the map* (segment),
+*Doors to these map rooms* (only real doors; empty = every adjacent segment),
+and X/Y of targets 2 and 3. Map segments without a radar count as outside.
+Exits the map does not show (stairs, front door) are marked on the card.
+
+Then calibrate each sensor on the **position card**
+(`type: custom:radar-occupancy-card`, loaded automatically): place it on the
+map and turn its field of view until your dot appears where you stand (wall),
+or take three or more samples (ceiling). Distorted calibrations are detected;
+such rooms keep their distance rule. Walking towards a door pre-lights the
+room behind it.
+
+Services: `sample`, `undo_sample`, `sample_area`, `set_location`,
+`set_orientation`, `set_boundary`, `reset_calibration`, `set_calibration`
+(backup/import), `set_exit`, `set_floor`, `refresh_maps`, `release`.
 
 ## Entities per room
 
 | Entity | |
 | --- | --- |
-| `binary_sensor.<room>` | Occupancy; attributes `reason`, `last_distance`, `last_x`, `last_y`, `light_owned` |
+| `binary_sensor.<room>` | Occupancy; attributes `reason`, `mode` (`map`/`distance`), `people` (map mode), `last_distance`, `last_x`, `last_y`, `light_owned`, `light_mode` |
 | `sensor.<room>_last_seen_distance` | Where the radar last saw a target |
 | `switch.<room>_hold_occupancy` | Off: the room follows live presence only |
 | `switch.<room>_automatic_light`, `switch.<room>_only_when_dark` | If a light is configured |
@@ -115,14 +157,12 @@ them at the desk, and missed no exit.
 
 ## Roadmap
 
-- Positions on a floor plan or robot vacuum map, room shapes instead of
-  distances, doors derived from the map.
-- Counting people through doors for homes with more than one person.
-- Smooth light fades.
+- Floor plans from images, not only robot vacuum maps.
+- Several homes / floors without a robot.
 
 ## Compatibility
 
-Tested with Home Assistant 2026.2. Any radar works that provides a presence
+Tested with Home Assistant 2026.2 and 2026.9. Any radar works that provides a presence
 binary sensor and, for the door range, a distance sensor in millimetres.
 
 ## Development
@@ -156,5 +196,11 @@ Licht schalten.
 **Türbereich einmessen:** normal durch die Tür hinausgehen, danach
 **Türbereich vom letzten Verlassen lernen** drücken. Der Bereich beginnt dann
 50 cm vor der Stelle, an der das Radar dich verloren hat.
+
+**Kartenmodus** (optional, Eintrag „Wohnung“): Radarziele auf der
+Roboterkarte, Personen je Raum über Türen gezählt, mehrpersonentauglich.
+Licht: von Hand ausgeschaltet bleibt aus (auch nach kurzem Verlassen),
+weiches Ein- und Ausblenden, Vorblenden bei Annäherung. Eingemessen wird in
+der Positionskarte `custom:radar-occupancy-card`.
 
 Die Oberfläche ist auf Deutsch und Englisch übersetzt.

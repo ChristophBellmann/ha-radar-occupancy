@@ -6,7 +6,8 @@
         "description": "Was möchtest du hinzufügen?",
         "menu_options": {
           "room": "Raum mit Radarsensor",
-          "area": "Teilbereich eines Raums (z. B. Balkon)"
+          "area": "Teilbereich eines Raums (z. B. Balkon)",
+          "home": "Wohnung (Kartenmodus, Lichtautomatik, Lagebild)"
         }
       },
       "room": {
@@ -33,10 +34,20 @@
           "y_max": "Y bis",
           "light_entity": "Licht"
         }
+      },
+      "home": {
+        "title": "Wohnung hinzufügen",
+        "description": "Einmal je Installation. Enthält den Hauptschalter der Lichtautomatik, den Kartenmodus mit Personenzählung auf Roboterkarten, die Überblendzeiten und das Lagebild für die Positionskarte.",
+        "data": {
+          "name": "Name"
+        }
       }
     },
     "error": {
       "invalid_box": "„Von“ muss kleiner als „bis“ sein."
+    },
+    "abort": {
+      "already_configured": "Die Wohnung ist bereits eingerichtet."
     }
   },
   "options": {
@@ -62,13 +73,36 @@
           "brightness": "Helligkeit",
           "run_on": "Ausschalten nach",
           "window_start": "Zeitfenster von",
-          "window_end": "Zeitfenster bis (gleich wie von = immer)"
+          "window_end": "Zeitfenster bis (gleich wie von = immer)",
+          "x2_entity": "X Ziel 2",
+          "y2_entity": "Y Ziel 2",
+          "x3_entity": "X Ziel 3",
+          "y3_entity": "Y Ziel 3",
+          "map_camera": "Roboterkarte (Kamera)",
+          "map_room": "Raum auf der Karte",
+          "door_rooms": "Türen zu diesen Kartenräumen",
+          "remember_brightness": "Zuletzt von Hand gewählte Helligkeit"
         },
         "data_description": {
           "door_from": "Der Raum gilt nur als verlassen, wenn das Ziel in diesem Entfernungsbereich verschwindet. 0 bis 0 heißt: jedes Verschwinden zählt als Verlassen.",
           "handover": "Nur für Einpersonenhaushalte: Hat dieser Raum sein Ziel verloren und sieht ein anderer teilnehmender Raum jemanden, ist dieser Raum frei.",
           "takeover_min": "Näher liegende Ziele des Sensors dieses Raums ignorieren, z. B. ein festes Echo vom Türblatt.",
-          "run_on": "Wartezeit, nachdem der Raum frei wurde."
+          "run_on": "Wartezeit, nachdem der Raum frei wurde.",
+          "map_camera": "Kartenmodus: gespeicherte Karte dieses Stockwerks (dreame_vacuum-Kamera). Eingemessen wird in der Positionskarte.",
+          "map_room": "Der Raum der Roboterkarte, der diesem Raum entspricht.",
+          "door_rooms": "Kartenräume, die durch eine echte Tür erreichbar sind. Leer: alle angrenzenden. Kartenräume ohne Radar gelten als draußen.",
+          "remember_brightness": "Auf die zuletzt von Hand eingestellte Helligkeit einblenden statt auf die feste."
+        }
+      },
+      "home": {
+        "title": "Wohnung",
+        "data": {
+          "manual_off_reset": "„Von Hand aus“ endet, wenn der Raum so lange leer war",
+          "approach_brightness": "Vorblenden bei Annäherung an die Tür"
+        },
+        "data_description": {
+          "manual_off_reset": "Ein im belegten Raum von Hand ausgeschaltetes Licht bleibt aus, auch nach kurzem Verlassen. 0: nur bis zum nächsten Betreten.",
+          "approach_brightness": "Anteil der Zielhelligkeit, während jemand auf den Raum zugeht (Kartenmodus)."
         }
       }
     },
@@ -88,6 +122,9 @@
     "sensor": {
       "last_distance": {
         "name": "Zuletzt gesehen in"
+      },
+      "overview": {
+        "name": "Lagebild"
       }
     },
     "switch": {
@@ -99,6 +136,20 @@
       },
       "hold": {
         "name": "Belegung halten"
+      },
+      "light_automation": {
+        "name": "Lichtautomatik"
+      },
+      "map_mode": {
+        "name": "Kartenmodus"
+      }
+    },
+    "number": {
+      "fade_in": {
+        "name": "Einblenden"
+      },
+      "fade_out": {
+        "name": "Ausblenden"
       }
     }
   },
@@ -111,6 +162,237 @@
     },
     "no_distance": {
       "message": "Noch keine Entfernung gesehen; dafür ist eine Entfernungs-Entität nötig."
+    },
+    "no_home": {
+      "message": "Zuerst die Wohnung (Kartenmodus) einrichten."
+    },
+    "unknown_room": {
+      "message": "Unbekannter Raum: {room}"
+    },
+    "exit_point": {
+      "message": "Ein Ausgang braucht X und Y, oder „Entfernen“."
+    },
+    "no_map_camera": {
+      "message": "Zuerst für diesen Raum eine Roboterkarte wählen (Konfigurieren)."
+    },
+    "map_not_loaded": {
+      "message": "Die Karte ist noch nicht geladen; Karten neu laden."
+    },
+    "map_replaced": {
+      "message": "Die Karte wurde ersetzt. Zuerst die Einmessung dieses Sensors zurücksetzen."
+    },
+    "one_target": {
+      "message": "Zum Einmessen muss genau ein frisches Radarziel sichtbar sein. Bitte leicht bewegen."
+    },
+    "sample_too_close": {
+      "message": "Dieser Messpunkt liegt nur {cm} cm von einem gespeicherten Radar- oder Kartenpunkt entfernt. Gehe etwa 1 m weiter und tippe dort auf deine tatsächliche Position. Nicht gespeichert."
+    },
+    "too_many_samples": {
+      "message": "Höchstens zwölf Messpunkte; zum Neubeginn zurücksetzen."
+    },
+    "no_samples": {
+      "message": "Keine Messpunkte zum Entfernen vorhanden."
+    },
+    "no_such_sample": {
+      "message": "Dieser Messpunkt ist nicht gespeichert."
+    },
+    "place_first": {
+      "message": "Zuerst den Sensor auf der aktuellen Karte platzieren."
+    },
+    "calibrate_first": {
+      "message": "Zuerst einmessen oder Sensor platzieren und ausrichten."
+    }
+  },
+  "services": {
+    "sample": {
+      "name": "Messpunkt aufnehmen",
+      "description": "Ordnet die aktuelle Radarposition deiner Position auf der Karte zu.",
+      "fields": {
+        "room": {
+          "name": "Raum",
+          "description": "Raum: Eintrags-ID oder eine beliebige Entität des Raums."
+        },
+        "x": {
+          "name": "X",
+          "description": "Karten-X in mm."
+        },
+        "y": {
+          "name": "Y",
+          "description": "Karten-Y in mm."
+        }
+      }
+    },
+    "undo_sample": {
+      "name": "Letzten Messpunkt entfernen",
+      "description": "Entfernt den letzten Messpunkt des Raums.",
+      "fields": {
+        "room": {
+          "name": "Raum",
+          "description": "Raum: Eintrags-ID oder eine beliebige Entität des Raums."
+        }
+      }
+    },
+    "sample_area": {
+      "name": "Messpunkt einem Teilbereich zuordnen",
+      "description": "Behält einen Messpunkt als Referenz eines Teilbereichs (z. B. Balkon) und nimmt ihn aus der Raumumrechnung.",
+      "fields": {
+        "room": {
+          "name": "Raum",
+          "description": "Raum: Eintrags-ID oder eine beliebige Entität des Raums."
+        },
+        "sample": {
+          "name": "Messpunkt",
+          "description": "Nummer des Messpunkts, ab 1."
+        },
+        "area": {
+          "name": "Bereich",
+          "description": "room oder sub_area."
+        }
+      }
+    },
+    "set_location": {
+      "name": "Sensor platzieren",
+      "description": "Montageort des Sensors auf der Karte.",
+      "fields": {
+        "room": {
+          "name": "Raum",
+          "description": "Raum: Eintrags-ID oder eine beliebige Entität des Raums."
+        },
+        "x": {
+          "name": "X",
+          "description": "Karten-X in mm."
+        },
+        "y": {
+          "name": "Y",
+          "description": "Karten-Y in mm."
+        }
+      }
+    },
+    "set_orientation": {
+      "name": "Sensor ausrichten",
+      "description": "Blickrichtung (Grad, gegen den Uhrzeigersinn ab Karten-+X), Spiegelung und Montage. Mit dem Montageort ergibt sie eine maßstabstreue Umrechnung, die Vorrang vor den Messpunkten hat.",
+      "fields": {
+        "room": {
+          "name": "Raum",
+          "description": "Raum: Eintrags-ID oder eine beliebige Entität des Raums."
+        },
+        "heading": {
+          "name": "Blickrichtung",
+          "description": "Grad."
+        },
+        "mirrored": {
+          "name": "Gespiegelt",
+          "description": "Links und rechts tauschen."
+        },
+        "mount": {
+          "name": "Montage",
+          "description": "wall (Wand) oder ceiling (Decke)."
+        },
+        "height": {
+          "name": "Höhe",
+          "description": "Montagehöhe in mm (Decke)."
+        },
+        "clear": {
+          "name": "Entfernen",
+          "description": "Ausrichtung entfernen; danach gelten wieder die Messpunkte."
+        }
+      }
+    },
+    "set_boundary": {
+      "name": "Raumgrenze setzen",
+      "description": "Raumgrenze oder Türvorbereich von Hand einzeichnen.",
+      "fields": {
+        "room": {
+          "name": "Raum",
+          "description": "Raum: Eintrags-ID oder eine beliebige Entität des Raums."
+        },
+        "points": {
+          "name": "Eckpunkte",
+          "description": "Ecken [[x, y], ...] in Karten-mm."
+        },
+        "kind": {
+          "name": "Art",
+          "description": "room oder approach."
+        }
+      }
+    },
+    "reset_calibration": {
+      "name": "Einmessung zurücksetzen",
+      "description": "Löscht Messpunkte, Montageort und Grenzen des Raumsensors.",
+      "fields": {
+        "room": {
+          "name": "Raum",
+          "description": "Raum: Eintrags-ID oder eine beliebige Entität des Raums."
+        }
+      }
+    },
+    "set_calibration": {
+      "name": "Einmessung setzen",
+      "description": "Stellt eine vollständige Einmessung wieder her (Sicherung oder Übernahme).",
+      "fields": {
+        "room": {
+          "name": "Raum",
+          "description": "Raum: Eintrags-ID oder eine beliebige Entität des Raums."
+        },
+        "calibration": {
+          "name": "Einmessung",
+          "description": "map_id, samples, transform, location, heading, mirrored, mount, height, polygon, approach_polygon."
+        }
+      }
+    },
+    "set_exit": {
+      "name": "Ausgang setzen",
+      "description": "Ein Weg aus der Wohnung, den die Karte nicht zeigt, z. B. Treppe oder Wohnungstür.",
+      "fields": {
+        "room": {
+          "name": "Raum",
+          "description": "Raum: Eintrags-ID oder eine beliebige Entität des Raums."
+        },
+        "x": {
+          "name": "X",
+          "description": "Karten-X in mm."
+        },
+        "y": {
+          "name": "Y",
+          "description": "Karten-Y in mm."
+        },
+        "clear": {
+          "name": "Entfernen",
+          "description": "Alle Ausgänge des Raums entfernen."
+        }
+      }
+    },
+    "set_floor": {
+      "name": "Stockwerk einstellen",
+      "description": "Name einer Stockwerkskarte und ob sie auf dem Kopf angezeigt wird.",
+      "fields": {
+        "camera": {
+          "name": "Kartenkamera",
+          "description": "Kamera des Stockwerks."
+        },
+        "name": {
+          "name": "Name",
+          "description": "Wird über der Karte angezeigt."
+        },
+        "flip": {
+          "name": "Auf dem Kopf",
+          "description": "Karte um 180° drehen."
+        }
+      }
+    },
+    "refresh_maps": {
+      "name": "Karten neu laden",
+      "description": "Lädt die gespeicherten Roboterkarten neu."
+    },
+    "release": {
+      "name": "Raum freigeben",
+      "description": "Löst eine gehaltene Belegung einmalig; abgelehnt, solange ein Ziel sichtbar ist.",
+      "fields": {
+        "room": {
+          "name": "Raum",
+          "description": "Raum: Eintrags-ID oder eine beliebige Entität des Raums."
+        }
+      }
     }
   }
 }
