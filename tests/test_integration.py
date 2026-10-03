@@ -108,12 +108,17 @@ async def test_config_flow_creates_room_and_area(hass: HomeAssistant) -> None:
     assert result["type"] is FlowResultType.MENU
     assert result["menu_options"] == ["room", "home", "plan"]
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "room"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["errors"] == {"name": "name_required"}
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"name": "Office"})
+    assert result["step_id"] == "room_inputs"
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
-        {"name": "Office", CONF_PRESENCE: "binary_sensor.office_presence", CONF_DISTANCE: "sensor.office_distance"},
+        {CONF_PRESENCE: "binary_sensor.office_presence", CONF_DISTANCE: "sensor.office_distance"},
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     room = result["result"]
+    assert room.title == "Office"
     assert room.options[CONF_DOOR_FROM] == 0
     await hass.async_block_till_done()
 
@@ -345,3 +350,57 @@ async def test_last_seen_distance_published_on_loss(hass: HomeAssistant) -> None
     lose(hass, "office")
     await hass.async_block_till_done()
     assert hass.states.get("sensor.office_last_seen_distance").state == "1200.0"
+
+
+async def test_room_from_radar_device(hass: HomeAssistant) -> None:
+    """Choosing the radar device suggests its sensors and the room name from its area."""
+    from homeassistant.helpers import area_registry as ar
+    from homeassistant.helpers import device_registry as dr
+
+    source = MockConfigEntry(domain="esphome")
+    source.add_to_hass(hass)
+    area = ar.async_get(hass).async_create("Living room")
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=source.entry_id, identifiers={("esphome", "radar1")}, name="Radar 1"
+    )
+    dr.async_get(hass).async_update_device(device.id, area_id=area.id)
+    registry = er.async_get(hass)
+    registry.async_get_or_create(
+        "binary_sensor",
+        "esphome",
+        "p",
+        device_id=device.id,
+        suggested_object_id="radar_1_presence",
+        original_name="Presence",
+        original_device_class="occupancy",
+        config_entry=source,
+    )
+    for n in (1, 2, 3):
+        for axis in ("x", "y", "distance"):
+            registry.async_get_or_create(
+                "sensor",
+                "esphome",
+                f"t{n}{axis}",
+                device_id=device.id,
+                suggested_object_id=f"radar_1_target_{n}_{axis}",
+                original_name=f"Target {n} {axis}",
+                config_entry=source,
+            )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "room"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"device": device.id})
+    assert result["step_id"] == "room_inputs"
+    assert result["description_placeholders"] == {"room": "Living room", "found": "8"}
+    defaults = {str(key): key.default() for key in result["data_schema"].schema if callable(key.default)}
+    suggested = {
+        str(key): key.description["suggested_value"]
+        for key in result["data_schema"].schema
+        if key.description and "suggested_value" in key.description
+    }
+    assert defaults[CONF_PRESENCE] == "binary_sensor.radar_1_presence"
+    assert suggested[CONF_DISTANCE] == "sensor.radar_1_target_1_distance"
+    assert suggested["y3_entity"] == "sensor.radar_1_target_3_y"
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {**defaults, **suggested})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Living room"
+    assert result["result"].options["x2_entity"] == "sensor.radar_1_target_2_x"

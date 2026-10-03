@@ -8,6 +8,9 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
+from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector as sel
 
 from .const import (
@@ -54,6 +57,33 @@ from .const import (
     PLAN_PREFIX,
 )
 from .maps import InvalidImage, map_rooms, read_plan
+from .radar import Candidate, suggest
+
+CONF_DEVICE = "device"
+
+
+def device_suggestions(hass, device_id: str) -> dict[str, str]:
+    """Inputs suggested from the entities of a radar device."""
+    registry = er.async_get(hass)
+    candidates = [
+        Candidate(
+            entity.entity_id,
+            (entity.name or entity.original_name or "").lower(),
+            entity.device_class or entity.original_device_class,
+            entity.disabled_by is not None,
+        )
+        for entity in er.async_entries_for_device(registry, device_id)
+    ]
+    return suggest(candidates)
+
+
+def device_name(hass, device_id: str) -> str | None:
+    """Area of the device, else its name: a sensible default room name."""
+    device = dr.async_get(hass).async_get(device_id)
+    if device is None:
+        return None
+    area = ar.async_get(hass).async_get_area(device.area_id) if device.area_id else None
+    return area.name if area else device.name_by_user or device.name
 
 
 def _mm(maximum: int = 10000, minimum: int = 0, step: int = 50) -> sel.NumberSelector:
@@ -90,13 +120,17 @@ def _default(key: str, values: dict[str, Any]) -> vol.Required:
     return vol.Required(key, default=values.get(key, DEFAULTS.get(key)))
 
 
-def room_inputs(values: dict[str, Any]) -> dict:
-    return {
+def room_inputs(values: dict[str, Any], further: bool = False) -> dict:
+    schema = {
         vol.Required(CONF_PRESENCE, default=values.get(CONF_PRESENCE, vol.UNDEFINED)): _entity("binary_sensor"),
         _optional(CONF_DISTANCE, values): _entity("sensor"),
         _optional(CONF_X, values): _entity("sensor"),
         _optional(CONF_Y, values): _entity("sensor"),
     }
+    if further:
+        for key in (CONF_X2, CONF_Y2, CONF_X3, CONF_Y3):
+            schema[_optional(key, values)] = _entity("sensor")
+    return schema
 
 
 def _names(options: list[str]) -> sel.SelectSelector:
@@ -242,17 +276,37 @@ class RadarOccupancyConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(step_id="home", data_schema=schema)
 
     async def async_step_room(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """First the radar device (optional): its entities are suggested next."""
+        errors: dict[str, str] = {}
         if user_input is not None:
-            name = user_input.pop(CONF_NAME)
-            return self.async_create_entry(title=name, data={CONF_KIND: KIND_ROOM}, options={**DEFAULTS, **user_input})
+            device = user_input.get(CONF_DEVICE)
+            name = user_input.get(CONF_NAME) or (device_name(self.hass, device) if device else None)
+            if name:
+                self._room = {CONF_NAME: name, CONF_LIGHT: user_input.get(CONF_LIGHT)}
+                self._suggested = device_suggestions(self.hass, device) if device else {}
+                return await self.async_step_room_inputs()
+            errors[CONF_NAME] = "name_required"
         schema = vol.Schema(
             {
-                vol.Required(CONF_NAME): sel.TextSelector(),
-                **room_inputs({}),
+                vol.Optional(CONF_DEVICE): sel.DeviceSelector(sel.DeviceSelectorConfig()),
+                vol.Optional(CONF_NAME): sel.TextSelector(),
                 _optional(CONF_LIGHT, {}): _entity("light"),
             }
         )
-        return self.async_show_form(step_id="room", data_schema=schema)
+        return self.async_show_form(step_id="room", data_schema=schema, errors=errors)
+
+    async def async_step_room_inputs(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if user_input is not None:
+            options = {**DEFAULTS, **user_input}
+            if self._room.get(CONF_LIGHT):
+                options[CONF_LIGHT] = self._room[CONF_LIGHT]
+            return self.async_create_entry(title=self._room[CONF_NAME], data={CONF_KIND: KIND_ROOM}, options=options)
+        schema = vol.Schema(room_inputs(self._suggested, further=True))
+        return self.async_show_form(
+            step_id="room_inputs",
+            data_schema=schema,
+            description_placeholders={"room": self._room[CONF_NAME], "found": str(len(self._suggested))},
+        )
 
     async def async_step_area(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}

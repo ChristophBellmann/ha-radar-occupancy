@@ -13,13 +13,10 @@
       },
       "room": {
         "title": "Raum hinzufügen",
-        "description": "Radarsensor dieses Raums wählen. Entfernung und X/Y des ersten Ziels sind optional, werden aber für den Türbereich und Teilbereiche gebraucht.",
+        "description": "Radar-Gerät dieses Raums wählen; seine Sensoren werden im nächsten Schritt vorgeschlagen. Ohne Gerät wählst du sie selbst. Als Name wird der Bereich des Geräts vorgeschlagen.",
         "data": {
+          "device": "Radar-Gerät",
           "name": "Name",
-          "presence_entity": "Anwesenheit",
-          "distance_entity": "Entfernung Ziel 1",
-          "x_entity": "X Ziel 1",
-          "y_entity": "Y Ziel 1",
           "light_entity": "Licht"
         }
       },
@@ -55,11 +52,26 @@
           "image": "Pfad im Ordner www, z. B. grundriss/eg.png.",
           "image_width": "Eine Wand auf dem Plan messen und auf die ganze Bildbreite hochrechnen."
         }
+      },
+      "room_inputs": {
+        "title": "Sensoren für {room}",
+        "description": "{found} Sensoren wurden aus dem Gerät vorgeschlagen; bitte prüfen. Anwesenheit ist Pflicht. Die Entfernung von Ziel 1 braucht der Türbereich, X/Y die Teilbereiche, X/Y aller Ziele der Kartenmodus.",
+        "data": {
+          "presence_entity": "Anwesenheit",
+          "distance_entity": "Entfernung Ziel 1",
+          "x_entity": "X Ziel 1",
+          "y_entity": "Y Ziel 1",
+          "x2_entity": "X Ziel 2",
+          "y2_entity": "Y Ziel 2",
+          "x3_entity": "X Ziel 3",
+          "y3_entity": "Y Ziel 3"
+        }
       }
     },
     "error": {
       "invalid_box": "„Von“ muss kleiner als „bis“ sein.",
-      "plan_image": "Das Bild lässt sich nicht lesen. Es muss eine PNG- oder JPEG-Datei im Ordner www der Konfiguration sein."
+      "plan_image": "Das Bild lässt sich nicht lesen. Es muss eine PNG- oder JPEG-Datei im Ordner www der Konfiguration sein.",
+      "name_required": "Einen Namen angeben oder ein Gerät wählen."
     },
     "abort": {
       "already_configured": "Die Wohnung ist bereits eingerichtet."

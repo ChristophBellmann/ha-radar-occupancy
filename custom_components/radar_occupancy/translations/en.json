@@ -13,13 +13,10 @@
       },
       "room": {
         "title": "Add room",
-        "description": "Choose the radar sensor of this room. Distance and X/Y of the first target are optional but needed for the door range and sub-areas.",
+        "description": "Choose the radar device of this room; its sensors are suggested in the next step. Without a device you pick them yourself. The name defaults to the device's area.",
         "data": {
+          "device": "Radar device",
           "name": "Name",
-          "presence_entity": "Presence",
-          "distance_entity": "Distance of target 1",
-          "x_entity": "X of target 1",
-          "y_entity": "Y of target 1",
           "light_entity": "Light"
         }
       },
@@ -55,11 +52,26 @@
           "image": "Path inside the www folder, e.g. floorplans/ground.png.",
           "image_width": "Measure a wall shown on the plan and scale it to the full image width."
         }
+      },
+      "room_inputs": {
+        "title": "Sensors of {room}",
+        "description": "{found} sensors were suggested from the device; check them. Presence is required. Distance of target 1 is needed for the door range, X/Y for sub-areas, X/Y of all targets for map mode.",
+        "data": {
+          "presence_entity": "Presence",
+          "distance_entity": "Distance of target 1",
+          "x_entity": "X of target 1",
+          "y_entity": "Y of target 1",
+          "x2_entity": "X of target 2",
+          "y2_entity": "Y of target 2",
+          "x3_entity": "X of target 3",
+          "y3_entity": "Y of target 3"
+        }
       }
     },
     "error": {
       "invalid_box": "\"From\" must be smaller than \"to\".",
-      "plan_image": "The image cannot be read. It must be a PNG or JPEG file inside the www folder of your configuration."
+      "plan_image": "The image cannot be read. It must be a PNG or JPEG file inside the www folder of your configuration.",
+      "name_required": "Give a name or choose a device."
     },
     "abort": {
       "already_configured": "The home is already set up."
