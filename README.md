@@ -53,6 +53,30 @@ category *Integration*. Install *Radar Occupancy* and restart Home Assistant.
 
 Manually: copy `custom_components/radar_occupancy` into your `config/custom_components`.
 
+## Public integration and local configuration
+
+This repository is the reusable integration and its position card. Install it
+through HACS or copy `custom_components/radar_occupancy` into your Home Assistant
+configuration directory. No particular home, sensor naming scheme or private
+configuration repository is required.
+
+Your installation keeps its own configuration: Home Assistant config entries
+store room, radar, light and map assignments; `config/.storage/radar_occupancy`
+stores calibration and integration runtime data. Uploaded floor plans and other
+local assets also stay in your Home Assistant configuration. These files are
+not part of this public repository and must be preserved when updating.
+
+Updates replace only `config/custom_components/radar_occupancy`. Restart Home
+Assistant after updating, wait until it has fully started, then check the room
+entities, position card, calibration and light control. Existing installations
+keep their configured rooms; installation alone does not create room entries.
+When migrating from another radar automation, transfer light control room by
+room so that one controller owns each light.
+
+For development, change and test the code here first, commit and push it, then
+install that commit or release in the local Home Assistant installation. Any
+host-specific update script belongs in that installation's configuration repo.
+
 ## Setup
 
 *Settings → Devices & services → Add integration → Radar Occupancy → Room*.
@@ -267,3 +291,19 @@ Verlassen), weiches Ein- und Ausblenden, Vorblenden bei Annäherung.
 Eingemessen wird in der Positionskarte `custom:radar-occupancy-card`.
 
 Einrichtung, Entitäten und Positionskarte sind auf Deutsch und Englisch.
+
+
+### Öffentliche Integration, lokale Einrichtung
+
+Dieses öffentliche Repo enthält die wiederverwendbare Integration und die
+Positionskarte. Sensoren, Räume, Lichter und Karten werden je Installation in
+Home Assistant eingerichtet. Ein privates Konfigurationsrepo ist dafür nicht
+notwendig. Konfigurationseinträge sowie Kalibrierung und Laufzeitdaten unter
+`config/.storage/` bleiben lokal und bei Updates erhalten.
+
+Nach der Installation Home Assistant vollständig starten lassen, Räume über
+„Integration hinzufügen“ anlegen und die Positionskarte einbinden. Nach Updates
+bestehende Raumbelegung, Kalibrierung, Freigabe und Lichtsteuerung prüfen. Beim
+Umstieg vorhandene Lichtautomatik je Raum ablösen, damit nur eine Steuerung das
+Licht schaltet. Ein lokales Update-Skript gehört zum jeweiligen privaten
+Konfigurationsrepo; es übernimmt nur den Code aus diesem öffentlichen Repo.
