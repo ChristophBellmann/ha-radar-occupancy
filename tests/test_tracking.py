@@ -179,6 +179,13 @@ class PresenceTests(unittest.TestCase):
         self.p.step(self.t, [], hold={"Schlafzimmer"})
         self.assertEqual(self.p.count("Schlafzimmer"), 0)
 
+    def test_observation_survives_evaluation_clock_offset(self):
+        self.run_path([[1500, 2500]] * 4)
+        self.assertTrue(self.p.observed("Schlafzimmer", self.t + 0.001))
+        self.p.step(self.t + 0.5, [])
+        self.assertFalse(self.p.observed("Schlafzimmer", self.t + 0.501))
+        self.assertEqual(self.p.count("Schlafzimmer"), 1)
+
     def test_reasons_use_labels(self):
         self.p.configure(ROOMS, doors(), labels={"Schlafzimmer": "Bedroom", "Gang": "Hall"})
         self.run_path([[1500, 1000]] * 3 + self.walk([1500, 1000], [5500, 1000]) + [[5500, 1000]] * 3)

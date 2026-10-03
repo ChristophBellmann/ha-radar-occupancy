@@ -98,6 +98,7 @@ class Presence:
         self.events = []
         self.reasons = {}  # room -> {"code": ..., "from": room key, "to": room key}
         self.approaching = {}  # room -> time of the last approach to its door
+        self.last_step = None
 
     def name(self, room):
         return OUTSIDE if room == OUTSIDE else self.labels.get(room, room)
@@ -177,10 +178,19 @@ class Presence:
                 chosen.append(track)
         return max(1, len(chosen))
 
+    def observed(self, room, now):
+        """A confirmed target in the latest measurement, evaluated slightly later."""
+        return (
+            self.last_step is not None
+            and 0 <= now - self.last_step <= TRACK_TTL
+            and self.visible(room, self.last_step) > 0
+        )
+
     # -- Measurement step --------------------------------------------------------
     def step(self, now, observations, hold=None):
         """observations: list of (floor, point[, room]); room forces the
         assignment (sub-areas). hold: rooms whose occupancy is not held."""
+        self.last_step = now
         merged = self._merge(observations)
         self.lost = [d for d in self.lost if now - d["time"] <= REACQUIRE_WINDOW]
         alive = [t for t in self.tracks if now - t.seen <= TRACK_TTL]

@@ -108,7 +108,7 @@ class Target:
     def observed(self, now: float) -> bool:
         """A confirmed live target, distinct from a held or restored count."""
         if self.on_map:
-            return self.manager.home.tracking.visible(self.entry_id, now) > 0
+            return self.manager.home.tracking.observed(self.entry_id, now)
         return False
 
     @property
