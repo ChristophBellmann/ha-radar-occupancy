@@ -329,7 +329,7 @@ console.log('Karte registriert sich neben einer alten Positionskarte.');
   c._hass={language:'de',states:{}};
   assert.equal(c.reasonText('appeared_at_door',['outside','Gang']),'an der Tür zu draußen aufgetaucht');
   const summary=c.setupSummary({id:'a',room:'Bad',calibrated:true,samples:3,polygon:[[0,0],[1,0],[0,1]],boundary_source:'manual',approach_polygons:[],doors:[{to:'b',point:[0,0]}],map_ready:true,occupied:true,occupancy_reason:'moved',occupancy_reason_rooms:['Gang','Bad']});
-  assert.ok(summary.includes('1 Türen markiert') || summary.includes('Türen markiert'));
+  assert.ok(summary.includes('Eine Tür markiert.'));
   assert.ok(summary.includes('Gang → Bad'));
   console.log('Sprachen und Begründungen geprüft.');
 }
