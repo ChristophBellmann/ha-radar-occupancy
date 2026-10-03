@@ -79,7 +79,7 @@ class PresenceTests(unittest.TestCase):
 
     def test_vanishing_at_unseen_door_moves_person_after_short_wait(self):
         self.p.configure(ROOMS, doors(gang_covered=False))
-        self.run_path(self.walk([1500, 1000], [3700, 1000], 6))
+        self.run_path(self.walk([1500, 1000], [4300, 1000], 6))
         self.idle(1)
         self.assertEqual(self.p.count("Schlafzimmer"), 1)
         self.idle(4)
@@ -144,7 +144,9 @@ class PresenceTests(unittest.TestCase):
     def test_toilet_trip_and_return(self):
         self.run_path([[1000, 3000]] * 4)
         self.run_path(
-            self.walk([1000, 3000], [5500, 1000], 10) + self.walk([5500, 1000], [9500, 1500], 8) + [[9500, 1500]] * 3
+            (self.walk([1000, 3000], [3500, 1000], 5) + self.walk([3500, 1000], [5500, 1000], 5))
+            + self.walk([5500, 1000], [9500, 1500], 8)
+            + [[9500, 1500]] * 3
         )
         self.assertEqual(self.p.count("Schlafzimmer"), 0)
         self.assertEqual(self.p.count("Bad"), 1)
@@ -153,7 +155,7 @@ class PresenceTests(unittest.TestCase):
     def test_from_outside_and_back(self):
         self.run_path(self.walk([6000, 100], [6000, 1500], 4) + [[6000, 1500]] * 3)
         self.assertEqual(self.p.count("Gang"), 1)
-        self.run_path(self.walk([6000, 1500], [6000, 200], 4))
+        self.run_path(self.walk([6000, 1500], [6000, -200], 4))
         self.idle(3)
         self.assertEqual(self.p.count("Gang"), 0)
 
@@ -221,3 +223,20 @@ class PresenceTests(unittest.TestCase):
     def test_two_simultaneous_people_at_door_are_still_counted(self):
         self.run_path([[3700, 1000]] * 10, extra=[[2500, 2500]])
         self.assertEqual(self.p.count("Schlafzimmer"), 2)
+
+    def test_near_door_wall_crossing_does_not_release_room(self):
+        self.run_path([[3700, 1900]] * 4 + self.walk([3700, 1900], [4600, 1900], 6) + [[4600, 1900]] * 5)
+        self.assertEqual(self.p.count("Schlafzimmer"), 1)
+        self.assertEqual(self.p.count("Gang"), 0)
+
+    def test_drop_inside_near_unseen_door_does_not_release_room(self):
+        self.p.configure(ROOMS, doors(gang_covered=False))
+        self.run_path(self.walk([1500, 1000], [3700, 1000], 6))
+        self.idle(60)
+        self.assertEqual(self.p.count("Schlafzimmer"), 1)
+        self.assertEqual(self.p.count("Gang"), 0)
+
+    def test_jitter_across_door_outline_does_not_release_room(self):
+        self.run_path([[3500, 1000]] * 4 + [[4100, 1000], [3900, 1000]] * 8)
+        self.assertEqual(self.p.count("Schlafzimmer"), 1)
+        self.assertEqual(self.p.count("Gang"), 0)

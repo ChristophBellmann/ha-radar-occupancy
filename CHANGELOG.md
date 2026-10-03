@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.6
+
+- Map-mode transfers require a measured inside-to-outside crossing at the
+  actual doorway, followed by confirmation beyond the outline. Mere proximity
+  to a door or movement across a nearby wall no longer frees a room.
+- A dropout while still inside near an unseen door holds occupancy. A visible
+  receiver can complete a paired passage; an unseen receiver requires a measured
+  boundary crossing. Outside exits also require crossing the boundary.
+- At uncertain map edges the originating radar retains its own room. Unseen
+  doorway handovers do not consume a person still visibly present on the other
+  side. Existing manual release remains available for an ambiguous held room.
+- Regression tests cover wrong-wall movement, doorway jitter, inside dropouts,
+  actual crossings and retained lights. Simulation test paths now pass through
+  actual doors instead of cutting diagonally through walls.
+
 ## 0.3.5
 
 - Fix additive phantom people after repeated or long radar dropouts at doors.

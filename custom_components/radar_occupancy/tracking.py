@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import math
 from itertools import count as counter
+from itertools import pairwise
 
 from .geometry import distance, inside
 
@@ -25,6 +26,7 @@ MERGE = 800  # mm: targets of different sensors that are the same person
 GATE = 1500  # mm: largest jump of a track between two measurements
 TRACK_TTL = 2.0  # s without a measurement: the track ends
 EDGE = 400  # mm: tolerance at room outlines
+DOOR_CROSS = 450  # mm: measured boundary crossing must pass the actual doorway
 DOOR_PASS = 1300  # mm: a track changes rooms only this close to a door
 DOOR_NEAR = 1100  # mm: appearing "at the door"
 DOOR_LEAVE = 800  # mm: vanishing "at the door" (stricter: it switches lights off)
@@ -249,6 +251,30 @@ class Presence:
                 merged.append({"floor": floor, "point": point, "room": forced, "n": 1})
         return [(g["floor"], g["point"], g["room"]) for g in merged]
 
+    def _crossed_door(self, track, door, now):
+        """An inside-to-outside segment crosses the outline at this doorway."""
+        polygon = self.rooms.get(track.room, {}).get("polygon")
+        if not polygon or door.point is None:
+            return False
+        recent = [(t, p) for t, p in track.history if now - t <= 4 and t >= track.room_since]
+        for (_, a), (_, b) in pairwise(recent):
+            if not inside(a, polygon) or inside(b, polygon):
+                continue
+            dx, dy = b[0] - a[0], b[1] - a[1]
+            for c, d in zip(polygon, polygon[1:] + polygon[:1]):
+                ex, ey = d[0] - c[0], d[1] - c[1]
+                det = dx * ey - dy * ex
+                if abs(det) < 1e-9:
+                    continue
+                cx, cy = c[0] - a[0], c[1] - a[1]
+                along = (cx * ey - cy * ex) / det
+                edge = (cx * dy - cy * dx) / det
+                if 0 <= along <= 1 and 0 <= edge <= 1:
+                    crossing = [a[0] + along * dx, a[1] + along * dy]
+                    if math.dist(crossing, door.point) <= DOOR_CROSS:
+                        return True
+        return False
+
     def _move(self, track, obs, now):
         floor, point, forced = obs
         previous = track.point
@@ -264,10 +290,21 @@ class Presence:
             return
         # Rooms change only through a door; otherwise a sensor sees through a wall.
         doors = self.door_between(track.room, room)
-        if not any(
-            d.point is None or min(d.distance(floor, previous) or 1e9, d.distance(floor, point) or 1e9) <= DOOR_PASS
-            for d in doors
-        ):
+        source_polygon = self.rooms.get(track.room, {}).get("polygon")
+        target_polygon = self.rooms.get(room, {}).get("polygon")
+        if source_polygon and target_polygon:
+            valid_passage = (
+                inside(point, target_polygon)
+                and distance(point, source_polygon) >= 200
+                and any(self._crossed_door(track, d, now) for d in doors)
+            )
+        else:
+            # Explicit sub-areas have radar-coordinate assignments, no outline.
+            valid_passage = any(
+                d.point is None or min(d.distance(floor, previous) or 1e9, d.distance(floor, point) or 1e9) <= DOOR_PASS
+                for d in doors
+            )
+        if not valid_passage:
             track.pending = None
             return
         if track.pending != room:
@@ -351,7 +388,7 @@ class Presence:
         if paired:
             self.deaths.remove(paired)
             self.transfer(other, track.room, now)
-        elif self.count(other) and not door.covered_into(other):
+        elif self.count(other) > self.visible(other, now) and not door.covered_into(other):
             # A sensor cannot see departure from the other side (e.g. the
             # long corridor). Arrival here completes that unseen passage;
             # move its held person instead of adding another on every trip.
@@ -374,15 +411,18 @@ class Presence:
             self.lost.append({"room": track.room, "floor": track.floor, "point": track.point, "time": track.seen})
             return
         other = door.other(track.room)
-        if other == OUTSIDE:
+        crossed = self._crossed_door(track, door, track.seen)
+        if other == OUTSIDE and crossed:
             self._change(track.room, -1, WENT_OUT, now, track.room, OUTSIDE)
+        elif other != OUTSIDE:
+            self.deaths.append({"time": now, "door": door, "room": track.room, "to": other, "crossed": crossed})
         else:
-            self.deaths.append({"time": now, "door": door, "room": track.room, "to": other})
+            self.lost.append({"room": track.room, "floor": track.floor, "point": track.point, "time": track.seen})
 
     def _settle_deaths(self, now):
         for death in list(self.deaths):
             door = death["door"]
-            if not door.covered_into(death["to"]) and now - death["time"] >= UNSEEN_PASS:
+            if death.get("crossed") and not door.covered_into(death["to"]) and now - death["time"] >= UNSEEN_PASS:
                 # No sensor sees the other side: the passage itself is the evidence.
                 self.deaths.remove(death)
                 self.transfer(death["room"], death["to"], now)

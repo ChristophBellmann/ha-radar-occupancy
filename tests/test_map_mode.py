@@ -186,6 +186,8 @@ class Flat:
             xs, ys = [p[0] for p in poly], [p[1] for p in poly]
             if min(xs) <= point[0] <= max(xs) and min(ys) <= point[1] <= max(ys):
                 return key
+        if 5800 <= point[0] <= 6200 and -400 <= point[1] < 0:
+            return "hall"  # The radar sees the stair threshold being crossed.
         return None
 
     async def tick(self, seconds: float = 0.5) -> None:
@@ -238,7 +240,11 @@ async def test_people_counted_through_doors(hass: HomeAssistant, flat: Flat, mon
     assert flat.people("bed") == 1
     await flat.idle(600)  # sits still, the radar loses them
     assert flat.occupied("bed")
-    await flat.walk(line([1000, 3000], [5500, 1000], 10) + line([5500, 1000], [9500, 1500], 8) + [[9500, 1500]] * 3)
+    await flat.walk(
+        (line([1000, 3000], [3500, 1000], 5) + line([3500, 1000], [5500, 1000], 5))
+        + line([5500, 1000], [9500, 1500], 8)
+        + [[9500, 1500]] * 3
+    )
     assert flat.people("bed") == 0
     assert not flat.occupied("bed")
     assert flat.people("bath") == 1
@@ -255,7 +261,7 @@ async def test_second_person_leaving_keeps_still_person(hass: HomeAssistant, fla
     await flat.walk(line([2000, 1500], [5500, 1000], 8) + [[5500, 1000]] * 3)
     assert flat.people("bed") == 1
     assert flat.occupied("bed")
-    await flat.walk(line([5500, 1000], [6000, 200], 4))
+    await flat.walk(line([5500, 1000], [6000, -200], 4))
     await flat.idle(3)
     assert flat.people("hall") == 0
 
@@ -337,9 +343,17 @@ async def test_manual_off_survives_toilet_trip(hass: HomeAssistant, flat: Flat, 
     await flat.tick(1)
     assert hass.states.get("binary_sensor.bedroom").attributes["light_mode"] == "manual_off"
     calls.clear()
-    await flat.walk(line([1000, 3000], [5500, 1000], 10) + line([5500, 1000], [9500, 1500], 8) + [[9500, 1500]] * 3)
+    await flat.walk(
+        (line([1000, 3000], [3500, 1000], 5) + line([3500, 1000], [5500, 1000], 5))
+        + line([5500, 1000], [9500, 1500], 8)
+        + [[9500, 1500]] * 3
+    )
     await flat.idle(120)
-    await flat.walk(line([9500, 1500], [5500, 1000], 8) + line([5500, 1000], [1000, 3000], 10) + [[1000, 3000]] * 3)
+    await flat.walk(
+        line([9500, 1500], [5500, 1000], 8)
+        + (line([5500, 1000], [3500, 1000], 5) + line([3500, 1000], [1000, 3000], 5))
+        + [[1000, 3000]] * 3
+    )
     assert flat.occupied("bed")
     assert not [c for c in calls if c[1]["entity_id"] == "light.bed"], "stays off after the night trip"
     # Switched on by hand: automatic again, off after leaving.
@@ -349,7 +363,7 @@ async def test_manual_off_survives_toilet_trip(hass: HomeAssistant, flat: Flat, 
     )
     await flat.tick(1)
     assert hass.states.get("binary_sensor.bedroom").attributes["light_mode"] == "auto"
-    await flat.walk(line([1000, 3000], [5500, 1000], 10) + [[5500, 1000]] * 3)
+    await flat.walk((line([1000, 3000], [3500, 1000], 5) + line([3500, 1000], [5500, 1000], 5)) + [[5500, 1000]] * 3)
     await flat.idle(20)
     assert hass.states.get("light.bed").state == "off"
 
@@ -363,10 +377,10 @@ async def test_manual_off_ends_after_empty_time(hass: HomeAssistant, flat: Flat,
     await hass.services.async_call(
         "light", "turn_off", {"entity_id": "light.bed"}, blocking=True, context=Context(user_id="user")
     )
-    await flat.walk(line([1000, 3000], [5500, 1000], 10) + [[5500, 1000]] * 3)
+    await flat.walk((line([1000, 3000], [3500, 1000], 5) + line([3500, 1000], [5500, 1000], 5)) + [[5500, 1000]] * 3)
     await flat.idle(31 * 60)
     calls.clear()
-    await flat.walk(line([5500, 1000], [1000, 3000], 10) + [[1000, 3000]] * 3)
+    await flat.walk((line([5500, 1000], [3500, 1000], 5) + line([3500, 1000], [1000, 3000], 5)) + [[1000, 3000]] * 3)
     assert ("on", {"entity_id": "light.bed", "brightness_pct": 40}) in calls
 
 
@@ -423,7 +437,7 @@ async def test_fade_in_steps_and_fade_out_never_switches_on(hass: HomeAssistant,
     # One lamp switched off by hand at the switch; fading out leaves it alone.
     hass.states.async_set("light.bed_2", "off", {"supported_color_modes": ["brightness"]})
     calls.clear()
-    await flat.walk(line([1000, 3000], [5500, 1000], 10) + [[5500, 1000]] * 3)
+    await flat.walk((line([1000, 3000], [3500, 1000], 5) + line([3500, 1000], [5500, 1000], 5)) + [[5500, 1000]] * 3)
     await flat.idle(20)
     await hass.async_block_till_done(wait_background_tasks=True)
     assert not [c for c in calls if c[0] == "on" and c[1]["entity_id"] == "light.bed_2"]
@@ -442,3 +456,18 @@ def test_legacy_ghost_counts_migrate_once_preserving_occupancy():
     home = home_module.Home(manager, SimpleNamespace(entry_id="home"))
     assert home.people("bed") == 2
     manager.save.assert_called_once()
+
+
+async def test_own_sensor_near_wrong_wall_keeps_light_on(hass, flat, monkeypatch):
+    mock_lights(hass)
+    hass.states.async_set("light.bed", "off", {"supported_color_modes": ["brightness"]})
+    await flat.setup(monkeypatch, lights={"bed": "light.bed"})
+    for point in [[3700, 1900]] * 4 + [[4600, 1900]] * 8:
+        flat.at("bed", point)  # Its projected point is across a wall, not the doorway.
+        await flat.tick()
+    assert flat.people("bed") == 1
+    assert flat.people("hall") == 0
+    assert hass.states.get("light.bed").state == "on"
+    await flat.idle(60)
+    assert flat.people("bed") == 1
+    assert hass.states.get("light.bed").state == "on"

@@ -47,7 +47,8 @@ async def test_multiple_animated_people_leave_one_behind(hass, flat, monkeypatch
                 "id": "Walker",
                 "route": [
                     {"room": bed, "x": 1000, "y": 3000, "seconds": 6},
-                    {"room": hall, "x": 5500, "y": 1000, "seconds": 8},
+                    {"room": bed, "x": 3500, "y": 1000, "seconds": 4},
+                    {"room": hall, "x": 5500, "y": 1000, "seconds": 4},
                     {"room": hall, "x": 5500, "y": 1000, "seconds": 30},
                 ],
             },
@@ -160,7 +161,8 @@ async def test_live_two_people_last_exit_switches_off(hass, flat, monkeypatch):
                 "id": "First",
                 "route": [
                     {"room": bed, "x": 1000, "y": 3000, "seconds": 6},
-                    {"room": hall, "x": 5500, "y": 1000, "seconds": 8},
+                    {"room": bed, "x": 3500, "y": 1000, "seconds": 4},
+                    {"room": hall, "x": 5500, "y": 1000, "seconds": 4},
                     {"room": hall, "x": 5500, "y": 1000, "seconds": 50},
                 ],
             },
@@ -168,7 +170,8 @@ async def test_live_two_people_last_exit_switches_off(hass, flat, monkeypatch):
                 "id": "Second",
                 "route": [
                     {"room": bed, "x": 2900, "y": 3000, "seconds": 20},
-                    {"room": hall, "x": 6500, "y": 1000, "seconds": 8},
+                    {"room": bed, "x": 3500, "y": 1000, "seconds": 4},
+                    {"room": hall, "x": 6500, "y": 1000, "seconds": 4},
                     {"room": hall, "x": 6500, "y": 1000, "seconds": 40},
                 ],
             },

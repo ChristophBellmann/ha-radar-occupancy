@@ -60,7 +60,10 @@ async def test_walk_through_rooms_and_exit(hass, flat, monkeypatch):
     route = [{"room": bed, "x": 1000, "y": 3000, "seconds": 4}]
     from tests.test_map_mode import line
 
-    route += [{"room": bed, "x": x, "y": y, "seconds": 0.5} for x, y in line([1000, 3000], [5500, 1000], 10)]
+    route += [
+        {"room": bed, "x": x, "y": y, "seconds": 0.5}
+        for x, y in (line([1000, 3000], [3500, 1000], 5) + line([3500, 1000], [5500, 1000], 5))
+    ]
     route += [{"room": hall, "x": x, "y": y, "seconds": 0.5} for x, y in line([5500, 1000], [9500, 1500], 8)]
     route += [{"room": bath, "x": 9500, "y": 1500, "seconds": 20}]
     report = simulate(manager, route, ignore_restrictions=True)

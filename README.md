@@ -474,3 +474,19 @@ Erkannte. Für das Licht bleibt die gehaltene Belegung erhalten. Wieder
 auftauchende Ziele ohne bestätigten Türdurchgang erhöhen den Zähler nicht.
 Version 0.3.5 bereinigt einmalig alte aufgeblähte Zähler und hält die betroffenen
 Räume weiterhin belegt. Langdruck löst eine falsche Belegung wie bisher.
+
+
+In map mode a disappearing target near a door is not sufficient evidence of
+leaving. A measured trajectory must cross the room outline at the doorway,
+or a paired target must appear on the other side. An unseen adjacent room
+requires the measured crossing; otherwise occupancy stays held. Uncertain
+positions within 0.8 m of the originating sensor's room outline retain that
+room assignment. Calibration and door placement still determine accuracy.
+
+Im Kartenmodus reicht ein verschwundenes Ziel nahe einer Tür nicht zum
+Freigeben. Die gemessene Bewegung muss die Raumgrenze an der Tür überqueren,
+oder ein passendes Ziel muss auf der anderen Seite auftauchen. Wird die andere
+Seite nicht gemessen, ist die gemessene Grenzüberquerung erforderlich; sonst
+bleibt die Belegung gehalten. Bei unsicheren Positionen bis 0,8 m neben der
+Raumgrenze bleibt die Zuordnung zum Raum des messenden Sensors erhalten.
+Kalibrierung und Türpositionen bestimmen weiterhin die Genauigkeit.

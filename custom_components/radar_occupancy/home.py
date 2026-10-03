@@ -365,7 +365,11 @@ class Home:
                 presence_rooms[room_id] = {"floor": camera, "polygon": polygon}
                 coverage.append((camera, room_id, transform, mount, calibration.get("location")))
                 for t in targets:
-                    observations.append((camera, t["map"], t["area"]) if t.get("area") else (camera, t["map"]))
+                    # Keep the sensor's own room at uncertain map edges. An
+                    # imprecise projected target must not start in a neighbour
+                    # and bypass the doorway-crossing checks altogether.
+                    assigned = t.get("area") or (room_id if t["distance"] <= 800 else None)
+                    observations.append((camera, t["map"], assigned))
                 for aid, area in sub_areas:
                     presence_rooms[aid] = {"floor": camera, "polygon": None, "parent": room_id}
                     labels[aid] = area.entry.title

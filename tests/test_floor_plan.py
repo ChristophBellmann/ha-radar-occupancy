@@ -202,7 +202,7 @@ async def test_people_counted_on_a_floor_plan(
         plan.gone("bed")
         await plan.tick(30)
     assert hass.states.get("binary_sensor.bed").state == "on"
-    await plan.walk(line([1000, 3000], [5500, 1000], 10) + [[5500, 1000]] * 3)
+    await plan.walk((line([1000, 3000], [3500, 1000], 5) + line([3500, 1000], [5500, 1000], 5)) + [[5500, 1000]] * 3)
     assert plan.people("bed") == 0
     assert plan.people("hall") == 1
     state = hass.states.get("binary_sensor.hall")
