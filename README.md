@@ -108,28 +108,47 @@ Add *Home* once (*Add integration → Radar Occupancy → Home*). It brings
 | `number.<home>_fade_in`, `number.<home>_fade_out` | Fade times, 0 = switch |
 | `sensor.<home>_overview` | People in the home; attributes feed the position card |
 
-Map mode places every radar target on the saved map of a robot vacuum
-([dreame_vacuum](https://github.com/Tasshack/dreame-vacuum) cameras), fuses
-the targets of all sensors and counts **people per room**. A room becomes free
-only when everybody evidently walked out through a door. Somebody seen in
-another room says nothing about this room, so it works with several people.
+Map mode places every radar target on a map of the floor, fuses the targets of
+all sensors and counts **people per room**. A room becomes free only when
+everybody evidently walked out through a door. Somebody seen in another room
+says nothing about this room, so it works with several people.
 
-Per room (*Configure*): *Robot map* (camera), *Room on the map* (segment),
-*Doors to these map rooms* (only real doors; empty = every adjacent segment),
-and X/Y of targets 2 and 3. Map segments without a radar count as outside.
-Exits the map does not show (stairs, front door) are marked on the card.
+### The map: robot vacuum or floor plan
 
-Then calibrate each sensor on the **position card**
-(`type: custom:radar-occupancy-card`, loaded automatically; its texts are
-German only for now): place it on the
-map and turn its field of view until your dot appears where you stand (wall),
-or take three or more samples (ceiling). Distorted calibrations are detected;
-such rooms keep their distance rule. Walking towards a door pre-lights the
-room behind it.
+| Map source | Room outlines | Doors |
+| --- | --- | --- |
+| Saved map of a robot vacuum ([dreame_vacuum](https://github.com/Tasshack/dreame-vacuum) camera) | from the map | found where map rooms touch |
+| **Floor plan image** (*Add integration → Radar Occupancy → Floor plan*) | drawn on the card | marked on the card |
+
+A floor plan is any PNG or JPEG of one floor in the `www` folder of your
+configuration, e.g. `floorplans/ground.png`, plus the real width of the whole
+image in metres (measure one wall and scale it up). Add one entry per floor.
+
+Per room (*Configure*): *Map* (robot camera or floor plan), *Room on the map*
+(robot maps: the segment), *Doors to these map rooms* (robot maps: only real
+doors; empty = every adjacent segment), and X/Y of targets 2 and 3. Map rooms
+without a radar count as outside.
+
+### Calibration on the position card
+
+The **position card** (`type: custom:radar-occupancy-card`) is loaded
+automatically; add it to any dashboard. Its texts follow your Home Assistant
+language (English or German). For every sensor:
+
+1. **Place sensor** at its mounting point, then **Orient sensor**: turn the
+   field of view until your dot appears where you stand. Ceiling sensors
+   instead take three or more **calibration points**.
+2. Floor plans: **Draw room outline**, then **Mark door** for every door
+   (choose the room behind it, tap the door) and **Mark exit** for stairs or
+   the front door. Robot maps bring outlines and doors; correct them if needed.
+
+Distorted calibrations are detected; such rooms keep their distance rule.
+Walking towards a door pre-lights the room behind it.
 
 Services: `sample`, `undo_sample`, `sample_area`, `set_location`,
 `set_orientation`, `set_boundary`, `reset_calibration`, `set_calibration`
-(backup/import), `set_exit`, `set_floor`, `refresh_maps`, `release`.
+(backup/import), `set_exit`, `set_door`, `set_floor`, `refresh_maps`,
+`release`.
 
 ## Entities per room
 
@@ -142,9 +161,23 @@ Services: `sample`, `undo_sample`, `sample_area`, `set_location`,
 | `button.<room>_release` | Clear a held occupancy (refused while a target is present) |
 | `button.<room>_learn_door_from_last_exit` | See calibration |
 
-`reason` is one of `present`, `held`, `in_area`, `left_through_door`,
-`handed_over`, `safety_timeout`, `released`, `live`, `unavailable`, `empty`.
-A sensor that goes offline keeps the last decision.
+`reason` is a stable code for automations. Distance rule: `present`, `held`,
+`in_area`, `left_through_door`, `handed_over`, `safety_timeout`, `released`,
+`live`, `unavailable`, `empty`. Map mode: `moved`, `came_in`, `went_out`,
+`seen_in_room`, `appeared_at_door`, `released`, `hold_off`, with the rooms in
+`reason_from` and `reason_to` (`outside` for outside the home). A sensor that
+goes offline keeps the last decision.
+
+## Troubleshooting
+
+- **Room stays occupied**: press the room tile on the card for a second, or
+  `button.<room>_release`. Check `reason` on the occupancy sensor.
+- **Map not available**: robot maps need a saved map in the vacuum app; floor
+  plans need a PNG/JPEG below `www`. Use *Reload maps* on the card.
+- **Bug reports**: download the diagnostics of the home and the room entry
+  (*Settings → Devices & services → Radar Occupancy → ⋮ at the entry →
+  Download diagnostics*) and attach them to an issue. They contain entity ids,
+  settings and calibration, no images.
 
 ## Background
 
@@ -158,8 +191,8 @@ them at the desk, and missed no exit.
 
 ## Roadmap
 
-- Floor plans from images, not only robot vacuum maps.
-- Several homes / floors without a robot.
+- Map sources of other robot vacuum integrations.
+- More card languages (texts live in one table in the card).
 
 ## Compatibility
 
@@ -198,11 +231,13 @@ Licht schalten.
 **Türbereich vom letzten Verlassen lernen** drücken. Der Bereich beginnt dann
 50 cm vor der Stelle, an der das Radar dich verloren hat.
 
-**Kartenmodus** (optional, Eintrag „Wohnung“): Radarziele auf der
-Roboterkarte, Personen je Raum über Türen gezählt, mehrpersonentauglich.
-Licht: von Hand ausgeschaltet bleibt aus (auch nach kurzem Verlassen),
-weiches Ein- und Ausblenden, Vorblenden bei Annäherung. Eingemessen wird in
-der Positionskarte `custom:radar-occupancy-card`.
+**Kartenmodus** (optional, Eintrag „Wohnung“): Radarziele auf einer Karte,
+Personen je Raum über Türen gezählt, mehrpersonentauglich. Als Karte dient die
+gespeicherte Karte eines Saugroboters (dreame_vacuum) oder ein **Grundriss**
+als Bild (Eintrag „Grundriss“: PNG/JPEG im Ordner `www` plus die echte Breite
+des Bildes in Metern). Auf einem Grundriss werden Raumgrenzen gezeichnet und
+Türen markiert. Licht: von Hand ausgeschaltet bleibt aus (auch nach kurzem
+Verlassen), weiches Ein- und Ausblenden, Vorblenden bei Annäherung.
+Eingemessen wird in der Positionskarte `custom:radar-occupancy-card`.
 
-Einrichtung und Entitäten sind auf Deutsch und Englisch übersetzt; die
-Positionskarte gibt es bisher nur auf Deutsch.
+Einrichtung, Entitäten und Positionskarte sind auf Deutsch und Englisch.

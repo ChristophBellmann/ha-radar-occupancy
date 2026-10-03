@@ -236,3 +236,17 @@ async def test_plan_image_is_served(hass: HomeAssistant, freezer, tmp_path: Path
     response = await client.get(path)
     assert response.status == 200
     assert response.headers["Content-Type"] == "image/png"
+
+
+async def test_diagnostics(hass: HomeAssistant, freezer: FrozenDateTimeFactory, tmp_path: Path) -> None:
+    from custom_components.radar_occupancy.diagnostics import async_get_config_entry_diagnostics
+
+    plan = Plan(hass, freezer, tmp_path)
+    await plan.setup()
+    entries = {e.data[CONF_KIND]: e for e in hass.config_entries.async_entries(DOMAIN)}
+    home = await async_get_config_entry_diagnostics(hass, entries[KIND_HOME])
+    assert home["home"]["marked_doors"]
+    floor = await async_get_config_entry_diagnostics(hass, entries[KIND_PLAN])
+    assert "image" not in floor["floor"] and floor["floor"]["width"] == 1100
+    room = await async_get_config_entry_diagnostics(hass, plan.rooms["bed"])
+    assert room["on_map"] is True and room["map"]["calibrated"]
