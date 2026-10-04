@@ -44,6 +44,7 @@ from .const import (
 from .engine import Area, Room, RoomConfig, handover
 from .home import Home
 from .lights import LightController, LightState, in_window  # noqa: F401 - in_window re-exported
+from .tracking import OUTSIDE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -114,6 +115,12 @@ class Target:
     def arrival(self) -> float | None:
         """When someone last came in through a door (map mode)."""
         return self.manager.home.tracking.arrivals.get(self.entry_id) if self.on_map else None
+
+    def arrived_from_outside(self) -> bool:
+        """The last arrival came into the home from outside (stairs, front door)."""
+        if not self.on_map:
+            return False
+        return self.manager.home.tracking.arrived_from.get(self.entry_id) == OUTSIDE
 
     @property
     def people(self) -> int | None:

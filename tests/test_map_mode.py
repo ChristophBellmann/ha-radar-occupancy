@@ -537,3 +537,49 @@ async def test_echo_right_in_front_of_the_sensor_is_no_person(hass: HomeAssistan
         flat.at("hall", [lx + 10, ly + 200])  # 20 cm in front of the hall sensor
         await flat.tick(0.5)
     assert flat.people("hall") == 0
+
+
+async def _leave_with_lights_switched_off(hass: HomeAssistant, flat: Flat) -> None:
+    """In bed, out to the hall, lights still on: switch everything off by hand and leave."""
+    await flat.walk([[1000, 3000]] * 4)
+    await flat.walk(line([1000, 3000], [3500, 1000], 6) + line([3500, 1000], [5500, 1000], 6) + [[5500, 1000]] * 3)
+    assert hass.states.get("light.bed").state == "on" and hass.states.get("light.hall").state == "on"
+    # The radar missed leaving the bedroom: still held there.
+    hass.data[DOMAIN].home.tracking.counts[flat.entries["bed"].entry_id] = 1
+    await flat.idle(12)
+    for light in ("light.bed", "light.hall"):
+        await hass.services.async_call(
+            "light", "turn_off", {"entity_id": light}, blocking=True, context=Context(user_id="user")
+        )
+    await flat.tick(1)
+    assert hass.states.get("binary_sensor.bedroom").attributes["light_mode"] == "manual_off"
+    assert hass.states.get("binary_sensor.hall").attributes["light_mode"] == "manual_off"
+    # On the way out the radar loses and finds the person again near the stairs:
+    # that is no homecoming, the hall light stays off.
+    await flat.walk(line([5500, 1000], [6000, 150], 6))
+    assert hass.states.get("light.hall").state == "off"
+
+
+async def test_lights_come_back_when_returning_after_hours(hass: HomeAssistant, flat: Flat, monkeypatch) -> None:
+    mock_lights(hass)
+    for light in ("light.bed", "light.hall"):
+        hass.states.async_set(light, "off", {"supported_color_modes": ["brightness"]})
+    await flat.setup(monkeypatch, lights={"bed": "light.bed", "hall": "light.hall"})
+    await _leave_with_lights_switched_off(hass, flat)
+    await flat.idle(3 * 3600)
+    assert hass.states.get("light.hall").state == "off"
+    await flat.walk(line([6000, 150], [5500, 1000], 6) + [[5500, 1000]] * 3)
+    assert hass.states.get("light.hall").state == "on", "back home: hall light on"
+    await flat.walk(line([5500, 1000], [3500, 1000], 6) + line([3500, 1000], [1000, 3000], 6) + [[1000, 3000]] * 3)
+    assert hass.states.get("light.bed").state == "on", "bedroom light follows"
+
+
+async def test_hall_light_on_after_a_short_errand(hass: HomeAssistant, flat: Flat, monkeypatch) -> None:
+    mock_lights(hass)
+    for light in ("light.bed", "light.hall"):
+        hass.states.async_set(light, "off", {"supported_color_modes": ["brightness"]})
+    await flat.setup(monkeypatch, lights={"bed": "light.bed", "hall": "light.hall"})
+    await _leave_with_lights_switched_off(hass, flat)
+    await flat.idle(20 * 60)
+    await flat.walk(line([6000, 150], [5500, 1000], 6) + [[5500, 1000]] * 3)
+    assert hass.states.get("light.hall").state == "on", "coming in from outside ends switched off by hand"

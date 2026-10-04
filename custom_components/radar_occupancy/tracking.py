@@ -38,6 +38,7 @@ UNSEEN_PASS = 2.0  # s: door into an area no sensor sees
 CONFIRM_ONE = 1.0  # s: first target in an empty room
 CONFIRM_MORE = 3.0  # s: each further target visible at the same time
 SEPARATION = 1000  # mm: two simultaneous targets must be this far apart
+ARRIVAL_STEP = 150  # mm: an arrival has moved this far away from the door when confirmed
 VANISH_WINDOW = 60.0  # s: a person who vanished this recently is the one who moved on
 
 # Reason codes
@@ -103,6 +104,7 @@ class Presence:
         self.reasons = {}  # room -> {"code": ..., "from": room key, "to": room key}
         self.approaching = {}  # room -> time of the last approach to its door
         self.arrivals = {}  # room -> time someone last came in through a door
+        self.arrived_from = {}  # room -> where that person came from (OUTSIDE: into the home)
         self.vanished = {}  # room -> time a counted person last vanished without leaving
         self.observed_at = {}  # room -> time someone was last visible there
         self.max_people = None  # people living in the home (incl. regular guests)
@@ -163,11 +165,12 @@ class Presence:
     def transfer(self, source, target, now):
         self._change(source, -1, MOVED, now, source, target)
         self._change(target, +1, MOVED, now, source, target)
-        self._arrive(target, now)
+        self._arrive(target, now, source)
 
-    def _arrive(self, room, now):
+    def _arrive(self, room, now, source=None):
         if room in self.rooms:
             self.arrivals[room] = now
+            self.arrived_from[room] = source
 
     def reset(self, room, now, code=RELEASED):
         self.counts[room] = 0
@@ -359,7 +362,7 @@ class Presence:
             else:
                 track.counted = True
                 self._change(room, +1, MOVED, now, source, room)
-                self._arrive(room, now)
+                self._arrive(room, now, source)
             self.deaths = [d for d in self.deaths if not (d["room"] == source and d["to"] == room)]
 
     def _door_near(self, track, now, require_approach):
@@ -410,6 +413,10 @@ class Presence:
         )
         if lost:
             self.lost.remove(lost)
+            if track.born - lost["time"] > REACQUIRE_WINDOW and self._door_near(track, track.born, False):
+                # Gone at a door long ago and back at a door: somebody came in
+                # (home again after hours), not a radar dropout.
+                return False
             track.counted = True
             return True
         return False
@@ -422,8 +429,9 @@ class Presence:
         if door is None:
             # Appeared in the middle of the room: someone who was there, sitting still.
             return
-        self._arrive(track.room, now)
         other = door.other(track.room)
+        if self._moving_in(track, door):
+            self._arrive(track.room, now, other)
         paired = next(
             (d for d in self.deaths if d["door"] is door and d["room"] == other and now - d["time"] <= PAIR_WINDOW),
             None,
@@ -445,6 +453,15 @@ class Presence:
                 "from": other,
                 "to": track.room,
             }
+
+    def _moving_in(self, track, door):
+        """Walking away from the door into the room. Someone who reappears at
+        the door after a radar dropout, or is on the way out, is no arrival."""
+        if door.point is None:
+            return True
+        first = door.distance(track.floor, track.history[0][1])
+        last = door.distance(track.floor, track.point)
+        return first is not None and last is not None and last - first >= ARRIVAL_STEP
 
     def _died(self, track, now):
         if not track.counted or track.room is None:

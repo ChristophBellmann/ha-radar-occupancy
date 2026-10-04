@@ -10,9 +10,10 @@ States per light:
 * manual_off: someone switched the light off while the room was occupied.
   It stays off, also after leaving briefly (to the bathroom at night and
   back) and while someone in bed turns over. Ends when the light is switched
-  on again from outside, when the room was empty for the configured time, or
+  on again from outside, when the room was empty for the configured time,
   when someone comes in through a door after nobody was seen there for that
-  time (a held count must not keep the light off forever).
+  time (a held count must not keep the light off forever), or at once when
+  someone comes into the home from outside through this room.
 
 "From outside" is every change that does not come from this integration:
 switches, the app, voice commands and other automations alike.
@@ -202,6 +203,11 @@ class LightController:
                 st.occupied = occupied
                 st.empty_since = None if occupied else now
                 continue
+            if st.mode == MANUAL_OFF and new_arrival and any(t.arrived_from_outside() for t in occupied_targets):
+                # Back home: switching everything off on the way out was meant
+                # for the time away, not for the return. (A night trip to the
+                # bathroom never comes from outside.)
+                st.mode, st.manual_absent_since, changed = AUTO, None, True
             if st.mode == MANUAL_OFF and self.manual_off_reset():
                 changed |= self.manual_off_expiry(st, targets, occupied, new_arrival, now)
             entered = occupied and (not st.occupied or new_arrival)

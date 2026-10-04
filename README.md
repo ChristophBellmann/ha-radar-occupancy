@@ -136,8 +136,12 @@ With a light configured:
   automation): the light stays off, also after leaving briefly (to the
   bathroom at night and back) and while someone in bed turns over. Switching
   it on again gives it back to the automation; with a home entry it also ends
-  after the room was empty for 30 minutes (configurable), or when someone
-  comes in through a door after nobody was seen there for that time.
+  after the room was empty for 30 minutes (configurable), when someone
+  comes in through a door after nobody was seen there for that time, and at
+  once in the room someone enters the home through (stairs, front door): the
+  lights you switched off when leaving come on again when you return.
+  Arrivals are only people walking away from the door into the room; somebody
+  the radar loses and finds again at the door on the way out is none.
 - Rooms sharing a light keep it on while any of them is occupied.
 - With a home entry, lights **fade** in and out in perceptually even steps
   (CIE L*), at most one command per lamp in flight, so slow cloud lamps get
