@@ -13,7 +13,7 @@ from homeassistant.core import State
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt as dt_util
 
-from .geometry import inside
+from .geometry import distance, inside
 from .lights import LightController
 from .tracking import Presence
 
@@ -98,6 +98,7 @@ class ReplayHome:
         self.tracking = Presence(
             deepcopy(source.tracking.rooms), deepcopy(source.tracking.doors), counts, deepcopy(source.tracking.labels)
         )
+        self.tracking.max_people = source.tracking.max_people
 
     def uses_map(self, room):
         return room in self.tracking.rooms
@@ -161,7 +162,12 @@ def observation(manager, home, waypoint):
             for aid, area in manager.areas.items():
                 if area.parent and area.parent.entry_id == rid and area.area.contains(*radar):
                     return (info["floor"], point, aid)
-    return (info["floor"], point)
+    # The room selects the observing radar, just like a real sensor report.
+    # Preserve its room assignment at uncertain edges instead of testing a
+    # different (geometry-only) matching path from the live installation.
+    polygon = info.get("polygon")
+    assigned = rid if polygon and distance(point, polygon) <= 800 else None
+    return (info["floor"], point, assigned)
 
 
 def hold_off(manager):

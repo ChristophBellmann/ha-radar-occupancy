@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.12
+
+- Simulated positions use the selected radar's room assignment and the home's
+  household limit, matching production tracking instead of using geometry
+  alone. This makes missed-passage regressions reproducible in simulation.
+- Verified independent five-minute walks on an installation's two floor plans:
+  every mapped room is observed and receives its expected light commands.
+
 ## 0.3.11
 
 - Software fades use 50 ms steps, skipping repeated brightness values and

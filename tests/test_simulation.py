@@ -86,3 +86,20 @@ async def test_darkness_and_unavailable_report(hass, flat, monkeypatch):
     hass.states.async_set("light.bath", "unavailable")
     report = simulate(manager, room_route(manager, room), ignore_restrictions=True)
     assert "light.bath" in report["unavailable_lights"]
+
+
+async def test_simulation_uses_receiving_sensor_assignment(hass, flat, monkeypatch):
+    await flat.setup(monkeypatch, lights={"hall": "light.hall"})
+    hass.states.async_set("light.hall", "off", {"supported_color_modes": ["brightness"]})
+    manager = get_manager(hass)
+    bed, hall = (flat.entries[k].entry_id for k in ("bed", "hall"))
+    result = simulate(
+        manager,
+        [
+            {"room": bed, "x": 3700, "y": 1900, "seconds": 3},
+            {"room": hall, "x": 4600, "y": 1900, "seconds": 4},
+        ],
+        ignore_restrictions=True,
+    )
+    assert result["timeline"][-1]["people"][hall] == 1
+    assert any(c["service"] == "turn_on" and c["entity_id"] == "light.hall" for c in result["commands"])
