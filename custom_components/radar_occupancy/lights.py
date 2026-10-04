@@ -453,9 +453,7 @@ class LightController:
                     data = {"entity_id": leaf, "brightness": value}
                     if transition is not None:
                         data["transition"] = transition
-                    await self.hass.services.async_call(
-                        "light", "turn_on", data, blocking=True, context=context
-                    )
+                    await self.hass.services.async_call("light", "turn_on", data, blocking=True, context=context)
 
             sent[leaf] = value
             inflight[leaf] = self.hass.async_create_task(run())
