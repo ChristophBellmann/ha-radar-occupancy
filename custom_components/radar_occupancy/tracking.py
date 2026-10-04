@@ -224,6 +224,8 @@ class Presence:
         for gap, i, j in pairs:
             if gap > GATE or i in used_tracks or j in used_obs:
                 continue
+            if not self._can_match(alive[i], merged[j], now):
+                continue
             used_tracks.add(i)
             used_obs.add(j)
             self._move(alive[i], merged[j], now)
@@ -295,12 +297,31 @@ class Presence:
                 merged.append({"floor": floor, "point": point, "room": forced, "n": 1})
         return [(g["floor"], g["point"], g["room"]) for g in merged]
 
-    def _crossed_door(self, track, door, now):
+    def _can_match(self, track, obs, now):
+        """A trusted sighting in another room must not refresh a stuck track.
+
+        Missing the doorway does not prove who moved, but the receiving
+        radar still proves presence in its own room. Start a separate track
+        there instead of reporting the old room as visibly occupied forever.
+        Unassigned wall echoes continue to use the strict crossing checks.
+        """
+        _, point, forced = obs
+        if not forced or forced == track.room or track.room is None:
+            return True
+        source = self.rooms.get(track.room, {}).get("polygon")
+        target = self.rooms.get(forced, {}).get("polygon")
+        if not source or not target or not inside(point, target) or distance(point, source) < 200:
+            return True
+        return any(self._crossed_door(track, door, now, point) for door in self.door_between(track.room, forced))
+
+    def _crossed_door(self, track, door, now, next_point=None):
         """An inside-to-outside segment crosses the outline at this doorway."""
         polygon = self.rooms.get(track.room, {}).get("polygon")
         if not polygon or door.point is None:
             return False
         recent = [(t, p) for t, p in track.history if now - t <= 4 and t >= track.room_since]
+        if next_point is not None:
+            recent.append((now, next_point))
         for (_, a), (_, b) in pairwise(recent):
             if not inside(a, polygon) or inside(b, polygon):
                 continue

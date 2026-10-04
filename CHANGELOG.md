@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.10
+
+- A receiving radar's confirmed room sighting can no longer keep a nearby
+  track assigned to a different room indefinitely when the doorway was missed.
+  A new track establishes presence in the receiving room; the previous room
+  stays held unless a measured departure or the household limit releases it.
+- Regression coverage includes missed passages, wrong-wall projections,
+  normal doorway transfers and switching on the receiving room's light.
+
 ## 0.3.6
 
 - Map-mode transfers require a measured inside-to-outside crossing at the

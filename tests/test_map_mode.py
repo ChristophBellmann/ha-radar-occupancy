@@ -476,6 +476,30 @@ async def test_own_sensor_near_wrong_wall_keeps_light_on(hass, flat, monkeypatch
     assert hass.states.get("light.bed").state == "on"
 
 
+async def test_receiving_radar_cannot_be_locked_to_previous_room(hass, flat, monkeypatch):
+    """A short observation gap hides the door passage, not the destination."""
+    mock_lights(hass)
+    hass.states.async_set("light.hall", "off", {"supported_color_modes": ["brightness"]})
+    await flat.setup(monkeypatch, lights={"hall": "light.hall"})
+    # Last source sighting and first receiving sighting are close enough for
+    # nearest-neighbour matching, but the measured segment misses the door.
+    for _ in range(4):
+        flat.at("bed", [3700, 1900])
+        await flat.tick()
+    flat.gone("bed")
+    for _ in range(8):
+        flat.at("hall", [4600, 1900])
+        await flat.tick()
+    home = hass.data[DOMAIN].home
+    assert home.tracking.observed(flat.entries["hall"].entry_id, home.tracking.last_step)
+    assert not home.tracking.observed(flat.entries["bed"].entry_id, home.tracking.last_step)
+    assert flat.occupied("hall")
+    assert hass.states.get("light.hall").state == "on"
+    # No invented wall crossing: the previous room remains held until there
+    # is evidence of departure or the configured household limit applies.
+    assert flat.occupied("bed")
+
+
 async def test_household_limit_removes_the_place_someone_just_left(
     hass: HomeAssistant, flat: Flat, monkeypatch
 ) -> None:
