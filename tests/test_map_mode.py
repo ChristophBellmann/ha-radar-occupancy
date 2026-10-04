@@ -447,6 +447,48 @@ async def test_fade_in_steps_and_fade_out_never_switches_on(hass: HomeAssistant,
     assert ("off", {"entity_id": "light.bed"}) in calls
 
 
+@pytest.mark.parametrize("direction", ["enter", "off"])
+async def test_native_fade_uses_interpolated_perceptual_waypoints(hass, flat, monkeypatch, direction):
+    real_sleep = asyncio.sleep
+
+    async def no_wait(_seconds):
+        await real_sleep(0)
+
+    monkeypatch.setattr(lights_module.asyncio, "sleep", no_wait)
+    attrs = {"supported_color_modes": ["brightness"], "supported_features": 32, "brightness": 102}
+    hass.states.async_set("light.bed", "off" if direction == "enter" else "on", attrs)
+    calls = []
+
+    async def record(call):
+        calls.append((call.service, dict(call.data)))
+        hass.states.async_set(
+            "light.bed",
+            "on" if call.service == "turn_on" else "off",
+            {**attrs, "brightness": call.data.get("brightness", 102)},
+            context=call.context,
+        )
+
+    hass.services.async_register("light", "turn_on", record)
+    hass.services.async_register("light", "turn_off", record)
+    await flat.setup(monkeypatch, lights={"bed": "light.bed"})
+    await flat.set_fade(3, 3)
+    controller = hass.data[DOMAIN].lights
+    await controller.start_fade("light.bed", controller.groups()["light.bed"], direction)
+    values = [data["brightness"] for service, data in calls if service == "turn_on"]
+    transitions = [data["transition"] for service, data in calls if service == "turn_on"]
+    assert len(values) >= 10, "native interpolation must follow the perceptual curve"
+    assert values == sorted(values, reverse=direction == "off")
+    if direction == "enter":
+        assert values[0] == 1 and transitions[0] == 0, "off lamps start dim, never at their recalled on-level"
+        assert values[-1] == 102
+        transitions = transitions[1:]
+    else:
+        assert values[-1] == 1
+        assert calls[-1][0] == "turn_off"
+    assert all(value == 0.2 for value in transitions)
+    assert len(transitions) <= 16, "device interpolation must not become a 20 Hz command stream"
+
+
 def test_legacy_ghost_counts_migrate_once_preserving_occupancy():
     from types import SimpleNamespace
     from unittest.mock import Mock

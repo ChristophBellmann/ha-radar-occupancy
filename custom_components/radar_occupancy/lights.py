@@ -438,18 +438,35 @@ class LightController:
         duration = max(self.fade_time(direction), const.FADE_STEP)
         sent: dict[str, int] = {}
         inflight: dict[str, asyncio.Task] = {}
+        native = {
+            leaf
+            for leaf in leaves
+            if (state := self.hass.states.get(leaf))
+            and int(state.attributes.get("supported_features") or 0) & TRANSITION
+            and any(mode != "onoff" for mode in state.attributes.get("supported_color_modes", []))
+        }
+        native_next: dict[str, float] = {}
 
-        def send(leaf: str, value: int) -> None:
+        def send(leaf: str, value: int, transition: float | None = None) -> None:
             async def run() -> None:
                 async with self.slots:
+                    data = {"entity_id": leaf, "brightness": value}
+                    if transition is not None:
+                        data["transition"] = transition
                     await self.hass.services.async_call(
-                        "light", "turn_on", {"entity_id": leaf, "brightness": value}, blocking=True, context=context
+                        "light", "turn_on", data, blocking=True, context=context
                     )
 
             sent[leaf] = value
             inflight[leaf] = self.hass.async_create_task(run())
 
         try:
+            # Devices may remember their last on-level while off. Establish
+            # the dim starting point before asking their firmware to fade.
+            for leaf in native:
+                if self.is_off(leaf):
+                    send(leaf, 1, 0)
+            await asyncio.gather(*inflight.values(), return_exceptions=True)
             steps = max(1, round(duration / const.FADE_STEP))
             loop = asyncio.get_running_loop()
             started = loop.time()
@@ -488,16 +505,21 @@ class LightController:
                                 )
                             )
                         continue
-                    if int(state.attributes.get("supported_features") or 0) & TRANSITION:
-                        if i == 1:
-                            data = {"entity_id": leaf, "brightness": max(1, goal[leaf]), "transition": duration}
-                            commands.append(
-                                self.hass.services.async_call("light", "turn_on", data, blocking=True, context=context)
-                            )
-                        continue
                     # One command per lamp at a time: while a slow (cloud) command
                     # is still running, intermediate values are skipped.
                     if leaf in inflight and not inflight[leaf].done():
+                        continue
+                    if leaf in native:
+                        # Firmware interpolates between sparse CIE L* waypoints;
+                        # this keeps the low end smooth without a 20 Hz network
+                        # stream. Do not restart a transition already in flight.
+                        if progress + 1e-9 < native_next.get(leaf, 0) or sent.get(leaf) == max(1, goal[leaf]):
+                            continue
+                        endpoint = min(1, progress + const.NATIVE_FADE_STEP / duration)
+                        native_next[leaf] = endpoint
+                        value = max(1, perceptual(start[leaf], goal[leaf], endpoint))
+                        if value != sent.get(leaf):
+                            send(leaf, value, const.NATIVE_FADE_STEP)
                         continue
                     value = max(1, perceptual(start[leaf], goal[leaf], progress))
                     if value != sent.get(leaf):
@@ -511,8 +533,10 @@ class LightController:
             await asyncio.gather(*inflight.values(), return_exceptions=True)
             for leaf in leaves:
                 if leaf in sent and sent[leaf] != max(1, goal[leaf]):
-                    send(leaf, max(1, goal[leaf]))
+                    send(leaf, max(1, goal[leaf]), const.NATIVE_FADE_STEP if leaf in native else None)
             await asyncio.gather(*inflight.values(), return_exceptions=True)
+            if native:
+                await asyncio.sleep(const.NATIVE_FADE_STEP)
             if direction == "off" and not self.light_occupied(light):
                 await self.hass.services.async_call(
                     "light", "turn_off", {"entity_id": light}, blocking=True, context=context

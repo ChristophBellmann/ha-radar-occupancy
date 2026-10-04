@@ -145,7 +145,8 @@ With a light configured:
 - Rooms sharing a light keep it on while any of them is occupied.
 - With a home entry, lights **fade** in and out in perceptually even steps
   (CIE L*), at most one command per lamp in flight, so slow cloud lamps get
-  no backlog; lamps with native transitions get one command. Fading out never
+  no backlog. Software steps run at up to 20 Hz; native transitions interpolate
+  perceptual waypoints at up to 5 Hz, starting dim when the lamp was off. Fading out never
   switches on a lamp of a group that is already off.
 - Lamps that are unreachable drop commands silently. The light is switched off
   up to three times and checked again every five minutes, also after a restart,

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.11
+
+- Software fades use 50 ms steps, skipping repeated brightness values and
+  retaining at most one command per lamp in flight.
+- Transition-capable lamps interpolate 200 ms waypoints along the same
+  perceptual brightness curve. Off lamps first receive a dim starting level
+  so remembered brightness cannot cause a bright start. The final device
+  transition finishes before an off command is sent.
+- Tests cover monotonic native fade-in/out, dark startup, exact final levels
+  and bounded command rates alongside the existing software-fade tests.
+
 ## 0.3.10
 
 - A receiving radar's confirmed room sighting can no longer keep a nearby
