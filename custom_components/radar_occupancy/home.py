@@ -127,6 +127,8 @@ class Home:
         self.handover: bool = settings.get("handover", True)
         self.fade_in: float = settings.get("fade_in", 2.0)
         self.fade_out: float = settings.get("fade_out", 3.0)
+        # People living here incl. regular guests: an upper bound for the counts.
+        self.max_people: float = settings.get("max_people", 2)
         data = manager.saved.setdefault("map", {})
         for key in ("calibrations", "floors", "exits", "doors", "people"):
             data.setdefault(key, {})
@@ -430,6 +432,7 @@ class Home:
         self._configure(presence_rooms, coverage, labels)
         hold_off = {rid for rid, r in manager.rooms.items() if not r.room.hold}
         hold_off |= {aid for aid, info in presence_rooms.items() if info.get("parent") in hold_off}
+        self.tracking.max_people = int(self.max_people) if self.max_people else None
         self.tracking.step(now, observations, hold_off)
         self.ready = set(presence_rooms)
         people = {rid: n for rid, n in self.tracking.counts.items() if rid in manager.rooms or rid in manager.areas}
@@ -564,6 +567,7 @@ class Home:
             "light_automation": self.light_automation,
             "fade_in": self.fade_in,
             "fade_out": self.fade_out,
+            "max_people": self.max_people,
             "entities": manager.entity_ids(self.entry_id),
             "floors": floors,
             "sensors": sensors,

@@ -192,6 +192,9 @@
       },
       "fade_out": {
         "name": "Ausblenden"
+      },
+      "max_people": {
+        "name": "Personen höchstens"
       }
     }
   },

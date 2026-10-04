@@ -25,7 +25,9 @@ async def test_simulation_isolated(hass, flat, monkeypatch, held):
     counts = dict(manager.home.tracking.counts)
     room = flat.entries["bath"].entry_id
     result = simulate(manager, room_route(manager, room), held=held, ignore_restrictions=True)
-    assert any(c["service"] == "turn_on" for c in result["commands"])
+    # An empty room is entered: light on. In a held room, moving around inside
+    # is no entry (somebody turning over in bed must not get light).
+    assert any(c["service"] == "turn_on" for c in result["commands"]) is not held
     assert not any(c["service"] == "turn_off" for c in result["commands"]), "Sitting still is not an exit"
     assert result["timeline"][-1]["people"][room] >= 1
     assert manager.saved == before_saved

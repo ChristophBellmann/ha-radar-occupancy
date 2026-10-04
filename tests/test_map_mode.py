@@ -298,7 +298,7 @@ async def test_map_mode_off_uses_distance_rule(hass: HomeAssistant, flat: Flat, 
     assert not flat.occupied("bed")  # default door range: every loss is leaving
 
 
-async def test_fresh_sighting_lights_a_restored_occupied_room(hass: HomeAssistant, flat: Flat, monkeypatch) -> None:
+async def test_door_arrival_lights_a_held_room_movement_does_not(hass: HomeAssistant, flat: Flat, monkeypatch) -> None:
     mock_lights(hass)
     for light in ("light.bed", "light.bath"):
         hass.states.async_set(light, "off", {"supported_color_modes": ["brightness"]})
@@ -311,9 +311,12 @@ async def test_fresh_sighting_lights_a_restored_occupied_room(hass: HomeAssistan
     await flat.idle(2)
     assert hass.states.get("light.bed").state == "off"
     assert hass.states.get("light.bath").state == "off"
+    # Moving inside a held room (turning over in bed) switches nothing ...
     await flat.walk([[1000, 3000]] * 4)
-    assert hass.states.get("light.bed").state == "on"
-    assert hass.states.get("light.bath").state == "off", "Held counts alone must not switch a light on."
+    assert hass.states.get("light.bed").state == "off"
+    # ... coming in through the door does, even though the count stays held.
+    await flat.walk(line([9500, 1500], [5500, 1000], 8) + line([5500, 1000], [9500, 1500], 8) + [[9500, 1500]] * 3)
+    assert hass.states.get("light.bath").state == "on"
 
 
 async def test_daylight_release_lights_a_visible_occupied_room(hass: HomeAssistant, flat: Flat, monkeypatch) -> None:
@@ -384,7 +387,9 @@ async def test_manual_off_ends_after_empty_time(hass: HomeAssistant, flat: Flat,
     assert ("on", {"entity_id": "light.bed", "brightness_pct": 40}) in calls
 
 
-async def test_other_automation_is_not_by_hand(hass: HomeAssistant, flat: Flat, monkeypatch) -> None:
+async def test_voice_or_automation_off_counts_like_by_hand(hass: HomeAssistant, flat: Flat, monkeypatch) -> None:
+    """ "Licht aus" by voice or a dashboard slider runs through an automation;
+    it must keep the light off just like the wall switch."""
     mock_lights(hass)
     hass.states.async_set("light.bed", "off", {"supported_color_modes": ["brightness"]})
     await flat.setup(monkeypatch, lights={"bed": "light.bed"})
@@ -393,19 +398,17 @@ async def test_other_automation_is_not_by_hand(hass: HomeAssistant, flat: Flat, 
     automation = Context(parent_id="01AUTOMATION0000000000000")
     await hass.services.async_call("light", "turn_off", {"entity_id": "light.bed"}, blocking=True, context=automation)
     await flat.tick(1)
-    assert hass.states.get("binary_sensor.bedroom").attributes["light_mode"] == "auto"
-    # Brightness chosen by another automation is not remembered; by hand it is.
+    assert hass.states.get("binary_sensor.bedroom").attributes["light_mode"] == "manual_off"
+    # Turning over in bed does not bring it back.
+    await flat.walk([[1200, 3100]] * 6)
+    assert hass.states.get("light.bed").state == "off"
+    # Brightness chosen through a voice command or slider is remembered as well.
     await hass.services.async_call(
         "light", "turn_on", {"entity_id": "light.bed", "brightness": 200}, blocking=True, context=automation
     )
-    # Service completion precedes the queued state_changed callbacks.
     await hass.async_block_till_done()
-    assert "light.bed" not in hass.data[DOMAIN].lights.brightness
-    await hass.services.async_call(
-        "light", "turn_on", {"entity_id": "light.bed", "brightness": 90}, blocking=True, context=Context(user_id="u")
-    )
-    await hass.async_block_till_done()
-    assert hass.data[DOMAIN].lights.brightness["light.bed"] == 90
+    assert hass.data[DOMAIN].lights.brightness["light.bed"] == 200
+    assert hass.states.get("binary_sensor.bedroom").attributes["light_mode"] == "auto"
 
 
 async def test_light_automation_switch(hass: HomeAssistant, flat: Flat, monkeypatch) -> None:
@@ -471,3 +474,57 @@ async def test_own_sensor_near_wrong_wall_keeps_light_on(hass, flat, monkeypatch
     await flat.idle(60)
     assert flat.people("bed") == 1
     assert hass.states.get("light.bed").state == "on"
+
+
+async def test_household_limit_removes_the_place_someone_just_left(
+    hass: HomeAssistant, flat: Flat, monkeypatch
+) -> None:
+    await flat.setup(monkeypatch)
+    home = hass.data[DOMAIN].home
+    hall = flat.entries["hall"].entry_id
+    home.tracking.counts[hall] = 1  # a stale place nobody confirmed for a long time
+    await flat.walk([[1000, 3000]] * 4)
+    assert flat.people("bed") == 1 and flat.people("hall") == 1
+    # Vanishes in the middle of the bedroom (a departure the radar missed) and
+    # turns up in the bathroom a few seconds later.
+    await flat.idle(4)
+    await flat.walk([[9500, 1500]] * 6)
+    assert flat.people("bath") == 1
+    assert flat.people("bed") == 0, "the person who vanished moved on"
+    assert flat.people("hall") == 1, "the limit allows a second, unseen person"
+
+
+async def test_inflated_counts_shrink_to_the_household(hass: HomeAssistant, flat: Flat, monkeypatch) -> None:
+    await flat.setup(monkeypatch)
+    home = hass.data[DOMAIN].home
+    for key, n in (("bed", 3), ("hall", 2), ("bath", 3)):
+        home.tracking.counts[flat.entries[key].entry_id] = n
+    await flat.walk([[9500, 1500]] * 4)
+    assert sum(flat.people(k) for k in ("bed", "hall", "bath")) == 2
+    assert flat.people("bath") >= 1, "the visible person stays"
+    await hass.services.async_call(
+        "number", "set_value", {"entity_id": "number.flat_people_in_the_home_at_most", "value": 1}, blocking=True
+    )
+    await flat.tick(1)
+    assert [flat.people(k) for k in ("bed", "hall", "bath")] == [0, 0, 1]
+
+
+async def test_dropped_switch_on_is_repeated(hass: HomeAssistant, flat: Flat, monkeypatch) -> None:
+    calls = mock_lights(hass)
+    hass.states.async_set("light.bed", "off", {"supported_color_modes": ["brightness"]})
+    original = hass.services._services["light"]["turn_on"].job.target
+    dropped = []
+
+    async def flaky(call):
+        if not dropped:
+            dropped.append(call)  # the cloud swallowed the first command
+            return
+        await original(call)
+
+    hass.services.async_register("light", "turn_on", flaky)
+    await flat.setup(monkeypatch, lights={"bed": "light.bed"})
+    await flat.walk([[1000, 3000]] * 4)
+    assert dropped and hass.states.get("light.bed").state == "off"
+    await flat.walk([[1000, 3000]] * 24)
+    assert hass.states.get("light.bed").state == "on"
+    assert len([c for c in calls if c[0] == "on"]) == 1

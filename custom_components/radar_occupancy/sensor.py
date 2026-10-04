@@ -45,6 +45,7 @@ class OverviewSensor(RadarOccupancyEntity, SensorEntity):
             "simulation",
             "map_mode",
             "light_automation",
+            "max_people",
             "fade_in",
             "fade_out",
             "entities",

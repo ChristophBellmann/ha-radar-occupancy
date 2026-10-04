@@ -38,6 +38,7 @@ UNSEEN_PASS = 2.0  # s: door into an area no sensor sees
 CONFIRM_ONE = 1.0  # s: first target in an empty room
 CONFIRM_MORE = 3.0  # s: each further target visible at the same time
 SEPARATION = 1000  # mm: two simultaneous targets must be this far apart
+VANISH_WINDOW = 60.0  # s: a person who vanished this recently is the one who moved on
 
 # Reason codes
 SEEN = "seen_in_room"  # someone visible in the room
@@ -47,7 +48,8 @@ APPEARED_AT_DOOR = "appeared_at_door"  # at the door to `from`, nobody seen leav
 WENT_OUT = "went_out"  # left the home
 RELEASED = "released"  # released by hand
 HOLD_OFF = "hold_off"  # no target and hold switched off
-REASONS = (SEEN, MOVED, CAME_IN, APPEARED_AT_DOOR, WENT_OUT, RELEASED, HOLD_OFF)
+HOUSEHOLD = "household_limit"  # more people counted than live in the home: a held place was stale
+REASONS = (SEEN, MOVED, CAME_IN, APPEARED_AT_DOOR, WENT_OUT, RELEASED, HOLD_OFF, HOUSEHOLD)
 
 
 class Door:
@@ -100,6 +102,10 @@ class Presence:
         self.events = []
         self.reasons = {}  # room -> {"code": ..., "from": room key, "to": room key}
         self.approaching = {}  # room -> time of the last approach to its door
+        self.arrivals = {}  # room -> time someone last came in through a door
+        self.vanished = {}  # room -> time a counted person last vanished without leaving
+        self.observed_at = {}  # room -> time someone was last visible there
+        self.max_people = None  # people living in the home (incl. regular guests)
         self.last_step = None
 
     def name(self, room):
@@ -157,6 +163,11 @@ class Presence:
     def transfer(self, source, target, now):
         self._change(source, -1, MOVED, now, source, target)
         self._change(target, +1, MOVED, now, source, target)
+        self._arrive(target, now)
+
+    def _arrive(self, room, now):
+        if room in self.rooms:
+            self.arrivals[room] = now
 
     def reset(self, room, now, code=RELEASED):
         self.counts[room] = 0
@@ -226,15 +237,45 @@ class Presence:
             elif not track.counted and track.room and track.age(now) >= CONFIRM_ONE and track.seen == now:
                 self._born(track, now)
         self._settle_deaths(now)
+        seen_now = {}
         for room in self.rooms:
-            seen = self.visible(room, now)
+            seen = seen_now[room] = self.visible(room, now)
+            if seen:
+                self.observed_at[room] = now
             if seen > self.count(room):
                 self.counts[room] = seen
                 self.reasons[room] = {"code": SEEN, "from": None, "to": None}
             if hold and room in hold and seen == 0 and self.count(room):
                 self.counts[room] = 0
                 self.reasons[room] = {"code": HOLD_OFF, "from": None, "to": None}
+        self._limit(now, seen_now)
         self._approach(now)
+
+    def _limit(self, now, seen):
+        """Never count more people than live in the home.
+
+        Every departure the sensors miss leaves a held place behind; without a
+        limit the counts only grow. A held place nobody is visible in goes
+        first: the room someone just vanished from (the same person walked
+        on), otherwise the one confirmed longest ago. People who are visible
+        are never removed, so a second person sitting still elsewhere stays
+        as long as the limit allows it."""
+        if not self.max_people:
+            return
+        while sum(self.count(r) for r in self.rooms) > self.max_people:
+            candidates = [r for r in self.rooms if self.count(r) > seen.get(r, 0)]
+            if not candidates:
+                return
+            recent = [r for r in candidates if now - self.vanished.get(r, -1e9) <= VANISH_WINDOW]
+            if recent:
+                room = max(recent, key=lambda r: self.vanished[r])
+            else:
+                room = min(candidates, key=lambda r: (self.observed_at.get(r, -1e9), -self.count(r)))
+            self._change(room, -1, HOUSEHOLD, now)
+            self.vanished.pop(room, None)
+            if self.count(room) == 0:
+                self.lost = [d for d in self.lost if d["room"] != room]
+                self.deaths = [d for d in self.deaths if d["room"] != room]
 
     def _merge(self, observations):
         merged = []
@@ -318,6 +359,7 @@ class Presence:
             else:
                 track.counted = True
                 self._change(room, +1, MOVED, now, source, room)
+                self._arrive(room, now)
             self.deaths = [d for d in self.deaths if not (d["room"] == source and d["to"] == room)]
 
     def _door_near(self, track, now, require_approach):
@@ -380,6 +422,7 @@ class Presence:
         if door is None:
             # Appeared in the middle of the room: someone who was there, sitting still.
             return
+        self._arrive(track.room, now)
         other = door.other(track.room)
         paired = next(
             (d for d in self.deaths if d["door"] is door and d["room"] == other and now - d["time"] <= PAIR_WINDOW),
@@ -409,6 +452,7 @@ class Presence:
         door = self._door_near(track, now, True)
         if door is None:
             self.lost.append({"room": track.room, "floor": track.floor, "point": track.point, "time": track.seen})
+            self.vanished[track.room] = track.seen
             return
         other = door.other(track.room)
         crossed = self._crossed_door(track, door, track.seen)
@@ -418,6 +462,7 @@ class Presence:
             self.deaths.append({"time": now, "door": door, "room": track.room, "to": other, "crossed": crossed})
         else:
             self.lost.append({"room": track.room, "floor": track.floor, "point": track.point, "time": track.seen})
+            self.vanished[track.room] = track.seen
 
     def _settle_deaths(self, now):
         for death in list(self.deaths):
@@ -433,6 +478,7 @@ class Presence:
                 self.lost.append(
                     {"room": death["room"], "floor": door.floor, "point": door.point, "time": death["time"]}
                 )
+                self.vanished[death["room"]] = death["time"]
 
     def _approach(self, now):
         for track in self.tracks:

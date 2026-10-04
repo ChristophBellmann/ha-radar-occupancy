@@ -121,17 +121,23 @@ handover off unless one person lives in the home, or switch
 
 With a light configured:
 
-- **Entering** an empty room switches the light on (brightness, *Only when
-  dark* via `sun.sun`, time window). *Last brightness set by hand* fades to
-  the brightness you chose last instead of the fixed one.
+- **Entering** switches the light on (brightness, *Only when dark* via
+  `sun.sun`, time window): the room's count rises, or in map mode someone
+  comes in through a door while the room is still held. Moving around inside
+  the room switches nothing. If it gets dark (or the time window opens)
+  while someone is in the room, the light comes on when they are next seen.
+  A switch-on the lamp did not confirm is repeated up to three times.
+  *Last brightness set by hand* fades to the brightness you chose last
+  instead of the fixed one.
 - **Leaving**: after the run-on time the light is switched off — also a light
   that was on before someone entered, because whoever entered owns it.
   A light switched on while nobody entered stays on.
-- **Switched off by hand** in an occupied room: the light stays off, also
-  after leaving briefly (to the bathroom at night and back). Switching it on
-  by hand gives it back to the automation; with a home entry it also ends
-  after the room was empty for 30 minutes (configurable). Changes by other
-  automations do not count as "by hand".
+- **Switched off** in an occupied room (switch, app, voice command or another
+  automation): the light stays off, also after leaving briefly (to the
+  bathroom at night and back) and while someone in bed turns over. Switching
+  it on again gives it back to the automation; with a home entry it also ends
+  after the room was empty for 30 minutes (configurable), or when someone
+  comes in through a door after nobody was seen there for that time.
 - Rooms sharing a light keep it on while any of them is occupied.
 - With a home entry, lights **fade** in and out in perceptually even steps
   (CIE L*), at most one command per lamp in flight, so slow cloud lamps get
@@ -142,6 +148,12 @@ With a light configured:
   until it really reports off.
 
 ## Map mode (optional): people counted through doors
+
+*People in the home at most* (`number.<home>_people_in_the_home_at_most`,
+default 2, 0 = no limit) bounds the counts. Every departure the sensors miss
+leaves a held place behind; above the limit the held place nobody is visible
+in goes first: the room someone just vanished from, otherwise the one
+confirmed longest ago. Raise it while visitors are here.
 
 Add *Home* once (*Add integration → Radar Occupancy → Home*). It brings
 

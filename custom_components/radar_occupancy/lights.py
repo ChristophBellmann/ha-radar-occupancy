@@ -3,15 +3,19 @@
 States per light:
 
 * auto: entering switches the light on (only when dark, time window), the
-  last person leaving switches it off after the run-on time. In map mode a
-  person walking towards the door pre-lights the room.
-* manual_off: someone switched the light off by hand while the room was
-  occupied. It stays off, also after leaving briefly (to the bathroom at
-  night and back). Ends when the light is switched on by hand, or after the
-  room was empty for the configured time.
+  last person leaving switches it off after the run-on time. Entering is the
+  count of the room rising, or, in map mode, someone coming in through a
+  door while the room is still held. Moving inside the room switches
+  nothing. In map mode a person walking towards the door pre-lights the room.
+* manual_off: someone switched the light off while the room was occupied.
+  It stays off, also after leaving briefly (to the bathroom at night and
+  back) and while someone in bed turns over. Ends when the light is switched
+  on again from outside, when the room was empty for the configured time, or
+  when someone comes in through a door after nobody was seen there for that
+  time (a held count must not keep the light off forever).
 
-"By hand" is every change that neither comes from this integration nor from
-another automation (a context with a parent but without a user).
+"From outside" is every change that does not come from this integration:
+switches, the app, voice commands and other automations alike.
 
 Whoever entered owns the light: it is switched off on leaving even if it was
 already on. A light switched on while nobody entered stays on.
@@ -81,6 +85,12 @@ class LightState:
     owned: bool = False
     occupied: bool | None = None  # None: not evaluated since start
     empty_since: float | None = None
+    manual_absent_since: float | None = None
+    last_arrival: float | None = None  # newest door arrival already handled
+    on_since: float | None = None  # switched on for an entry, not confirmed yet
+    on_tries: int = 0
+    was_allowed: bool | None = None  # light rule (dark, time window) at the last evaluation
+    allowed_pending: bool = False  # became allowed while occupied: next sighting switches on
     prelit_since: float | None = None
     last_off_try: float | None = None
     off_task: asyncio.Task | None = None
@@ -92,7 +102,11 @@ class LightController:
         self.hass = manager.hass
         self.state: dict[str, LightState] = {}
         for entity_id, data in manager.saved.get("lights", {}).items():
-            self.state[entity_id] = LightState(mode=data.get("mode", AUTO), owned=data.get("owned", False))
+            self.state[entity_id] = LightState(
+                mode=data.get("mode", AUTO),
+                owned=data.get("owned", False),
+                manual_absent_since=data.get("manual_absent_since"),
+            )
         self.brightness: dict[str, int] = manager.saved.setdefault("brightness", {})
         self.contexts: deque[str] = deque(maxlen=300)
         self.last_command: dict[str, float] = {}
@@ -161,7 +175,10 @@ class LightController:
         return self.hass.states.is_state(light, STATE_OFF)
 
     def save(self) -> None:
-        self.manager.saved["lights"] = {e: {"mode": s.mode, "owned": s.owned} for e, s in self.state.items()}
+        self.manager.saved["lights"] = {
+            e: {"mode": s.mode, "owned": s.owned, "manual_absent_since": s.manual_absent_since}
+            for e, s in self.state.items()
+        }
         self.manager.save()
 
     # Evaluation ---------------------------------------------------------
@@ -175,23 +192,20 @@ class LightController:
             st = self.state.setdefault(light, LightState())
             occupied_targets = [t for t in targets if t.occupied]
             occupied = bool(occupied_targets)
+            arrivals = [a for a in (t.arrival() for t in occupied_targets) if a is not None]
+            arrival = max(arrivals) if arrivals else None
+            new_arrival = arrival is not None and arrival > (st.last_arrival or -1e9)
+            if new_arrival:
+                st.last_arrival = arrival
             if st.occupied is None:
                 # First evaluation after start or re-enabling: adopt, switch nothing.
                 st.occupied = occupied
                 st.empty_since = None if occupied else now
                 continue
-            # A restored/held count can already be positive when someone is
-            # first seen again. That is still a valid light trigger. Counts
-            # alone do not trigger, manual-off stays respected, and recent
-            # commands are allowed to finish before retrying an off light.
-            observed_entry = (
-                occupied
-                and st.mode == AUTO
-                and self.is_off(light)
-                and now - self.last_command.get(light, -1e9) >= const.OWN_ECHO
-                and any(t.observed(now) and self.allowed(t) for t in occupied_targets)
-            )
-            if occupied and (not st.occupied or observed_entry):
+            if st.mode == MANUAL_OFF and self.manual_off_reset():
+                changed |= self.manual_off_expiry(st, targets, occupied, new_arrival, now)
+            entered = occupied and (not st.occupied or new_arrival)
+            if entered:
                 st.empty_since = None
                 if st.mode == MANUAL_OFF and not self.manual_off_reset():
                     st.mode, changed = AUTO, True  # without a home entry: ends with the next entering
@@ -203,10 +217,13 @@ class LightController:
                     and (self.is_off(light) or st.prelit_since)
                 ):
                     self.switch_on(light, occupied_targets, "enter")
+                    st.on_since, st.on_tries = now, 1
                 st.prelit_since = None
             elif not occupied and st.occupied:
                 st.empty_since = now
             st.occupied = occupied
+            self.became_allowed(light, st, occupied_targets, entered, now)
+            self.retry_on(light, st, occupied_targets, now)
             if occupied:
                 continue
             empty = now - st.empty_since if st.empty_since is not None else 0
@@ -216,12 +233,66 @@ class LightController:
                     st.owned, changed = False, True
                 else:
                     self.maybe_switch_off(light, st, now)
-            reset = self.manual_off_reset()
-            if st.mode == MANUAL_OFF and reset and empty >= reset:
-                st.mode, changed = AUTO, True
             self.approach(light, st, targets, now)
         if changed:
             self.save()
+
+    def manual_off_expiry(
+        self, st: LightState, targets: list[Target], occupied: bool, new_arrival: bool, now: float
+    ) -> bool:
+        """End "switched off by hand"; returns whether anything changed.
+
+        Only absence ends it, never movement inside the room: a sleeper
+        turning over must not bring the light back."""
+        reset = self.manual_off_reset()
+        empty_long = not occupied and st.empty_since is not None and now - st.empty_since >= reset
+        absent_long = st.manual_absent_since is not None and now - st.manual_absent_since >= reset
+        if empty_long or (new_arrival and absent_long):
+            st.mode, st.manual_absent_since = AUTO, None
+            return True
+        if any(t.observed(now) for t in targets):
+            if st.manual_absent_since is not None:
+                st.manual_absent_since = None
+                return True
+        elif st.manual_absent_since is None:
+            st.manual_absent_since = now
+            return True
+        return False
+
+    def became_allowed(
+        self, light: str, st: LightState, occupied_targets: list[Target], entered: bool, now: float
+    ) -> None:
+        """Dusk, the time window opening or "only when dark" switched off while
+        someone is in the room: the light comes on as soon as they are seen."""
+        allowed = any(self.allowed(t) for t in occupied_targets)
+        if allowed and st.was_allowed is False and occupied_targets and not entered:
+            st.allowed_pending = True
+        st.was_allowed = allowed if occupied_targets else None
+        if not occupied_targets or not allowed or st.mode != AUTO or not self.is_off(light):
+            st.allowed_pending = False
+        elif st.allowed_pending and any(t.observed(now) for t in occupied_targets):
+            st.allowed_pending = False
+            self.switch_on(light, occupied_targets, "enter")
+            st.on_since, st.on_tries = now, 1
+
+    def retry_on(self, light: str, st: LightState, occupied_targets: list[Target], now: float) -> None:
+        """Cloud lamps sometimes drop a command: try again until the light reports on."""
+        if st.on_since is None:
+            return
+        if (
+            self.hass.states.is_state(light, STATE_ON)
+            or not occupied_targets
+            or st.mode != AUTO
+            or not self.is_off(light)
+        ):
+            st.on_since = None
+            return
+        if now - st.on_since >= const.OWN_ECHO:
+            if st.on_tries >= const.OFF_ATTEMPTS:
+                st.on_since = None
+                return
+            st.on_since, st.on_tries = now, st.on_tries + 1
+            self.switch_on(light, occupied_targets, "enter")
 
     def manual_off_reset(self) -> float:
         if self.home is None:
@@ -463,20 +534,15 @@ class LightController:
         own = now - self.last_command.get(entity_id, -1e9) < const.OWN_ECHO or (
             ctx is not None and (ctx.id in self.contexts or ctx.parent_id in self.contexts)
         )
-        automation = ctx is not None and ctx.parent_id is not None and ctx.user_id is None
         brightness = new.attributes.get("brightness")
-        if (
-            new.state == STATE_ON
-            and not own
-            and not automation
-            and brightness
-            and self.brightness.get(entity_id) != brightness
-        ):
+        if new.state == STATE_ON and not own and brightness and self.brightness.get(entity_id) != brightness:
             self.brightness[entity_id] = brightness
             self.manager.save()
         st = self.state.get(entity_id)
         if st is None:
             return
+        if new.state == STATE_ON:
+            st.on_since = None  # an entry switch-on arrived (or someone else switched it on)
         if new.state == STATE_OFF:
             # Switched off, by us or anyone: nothing left to switch off.
             st.owned = False
@@ -487,14 +553,13 @@ class LightController:
         if not self.active() or own:
             self.save()
             return
-        if automation:
-            self.save()
-            return  # another automation, not by hand
         if new.state == STATE_OFF:
             if st.occupied:
                 st.mode = MANUAL_OFF
+                st.manual_absent_since = None if any(t.observed(now) for t in self.groups().get(entity_id, [])) else now
         else:
             st.mode = AUTO
+            st.manual_absent_since = None
             st.owned = bool(st.occupied)
         self.save()
 

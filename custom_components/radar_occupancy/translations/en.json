@@ -192,6 +192,9 @@
       },
       "fade_out": {
         "name": "Fade out"
+      },
+      "max_people": {
+        "name": "People in the home at most"
       }
     }
   },

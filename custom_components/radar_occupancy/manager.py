@@ -111,6 +111,10 @@ class Target:
             return self.manager.home.tracking.observed(self.entry_id, now)
         return False
 
+    def arrival(self) -> float | None:
+        """When someone last came in through a door (map mode)."""
+        return self.manager.home.tracking.arrivals.get(self.entry_id) if self.on_map else None
+
     @property
     def people(self) -> int | None:
         return self.manager.home.people(self.entry_id) if self.on_map else None
