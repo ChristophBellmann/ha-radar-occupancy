@@ -528,3 +528,12 @@ async def test_dropped_switch_on_is_repeated(hass: HomeAssistant, flat: Flat, mo
     await flat.walk([[1000, 3000]] * 24)
     assert hass.states.get("light.bed").state == "on"
     assert len([c for c in calls if c[0] == "on"]) == 1
+
+
+async def test_echo_right_in_front_of_the_sensor_is_no_person(hass: HomeAssistant, flat: Flat, monkeypatch) -> None:
+    await flat.setup(monkeypatch)
+    _, (lx, ly) = SENSORS["hall"]
+    for _ in range(10):
+        flat.at("hall", [lx + 10, ly + 200])  # 20 cm in front of the hall sensor
+        await flat.tick(0.5)
+    assert flat.people("hall") == 0

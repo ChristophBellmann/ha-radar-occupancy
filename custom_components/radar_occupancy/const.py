@@ -85,6 +85,7 @@ OWN_ECHO = 10  # s after own commands: state changes are not by hand
 PRELIT_TIMEOUT = 20  # s pre-lit for someone approaching who did not come in
 FADE_STEP = 0.1  # s per fade step
 LIGHT_SLOTS = 8  # concurrent light commands (cloud integrations have small pools)
+NEAR_FIELD = 300  # mm: targets closer to the sensor are echoes, not people
 TARGET_MAX_AGE = 5  # s: older radar coordinates are not a live target
 DEFAULT_FADE_IN = 0.0
 DEFAULT_FADE_OUT = 0.0

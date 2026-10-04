@@ -32,6 +32,7 @@ from .const import (
     CONF_MAP_ROOM,
     CONF_PARENT,
     CONF_PRESENCE,
+    CONF_TAKEOVER_MIN,
     CONF_X,
     CONF_X2,
     CONF_X3,
@@ -279,13 +280,17 @@ class Home:
         if not self.hass.states.is_state(options[CONF_PRESENCE], STATE_ON):
             return []
         now = dt_util.utcnow()
+        # Echoes from the wall or housing sit a few centimetres in front of the
+        # sensor (seen: 20 cm, two thirds of all hall readings in a night);
+        # nobody stands there. "Take over from" can widen this per room.
+        near = max(const.NEAR_FIELD, float(options.get(CONF_TAKEOVER_MIN) or 0))
         targets = []
         for index, (kx, ky) in enumerate(TARGET_PAIRS, 1):
             if not options.get(kx) or not options.get(ky):
                 continue
             states = [self.hass.states.get(options[kx]), self.hass.states.get(options[ky])]
             x, y = (number(s) for s in states)
-            if x is None or y is None or (x == 0 and y == 0):
+            if x is None or y is None or math.hypot(x, y) < near:
                 continue
             # last_reported also moves when the value stays the same.
             age = max((now - s.last_reported).total_seconds() for s in states)
