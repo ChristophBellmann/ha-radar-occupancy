@@ -475,6 +475,38 @@ der automatischen Erstellung verfügbar. **Stoppen** beendet den Test und
 stellt bei aktivem Lichttest die vorherigen Lampenzustände wieder her.
 
 
+### Realistic radars and light delay / Realistische Radare und Lichtverzögerung
+
+Simulated radars behave like the real ones: each sensor reports only people in
+its field of view and its own room (plus 80 cm for the doorway), and only every
+`sensor_interval` seconds (default 1 s, ESPHome's LD2450 rate); in between the
+last coordinates stay. Corners no sensor sees, such as the area in front of a
+bathroom door, therefore stay blind in the simulation as well.
+`sensor_interval: 0` with `field_of_view: false` gives the ideal sensor of
+earlier versions.
+
+`measure_simulation` runs the same walks at once on a virtual clock and returns
+`latency`: for every time a person really entered a room with a light, when the
+light was decided, in seconds after entering (negative: before). `prelit` is
+the dim pre-light on approach, `lit` the switch-on for entering; device latency
+and the fade come on top.
+
+Simulierte Radare melden nur, was im eigenen Sichtfeld und Raum liegt, und nur
+alle `sensor_interval` Sekunden. `measure_simulation` misst damit, wie viele
+Sekunden nach dem Betreten eines Raums das Licht beschlossen wird.
+
+```yaml
+action: radar_occupancy.measure_simulation
+data:
+  automatic: true
+  count: 1
+  duration: 300
+  seed: 7
+  ignore_restrictions: true
+response_variable: result  # result.latency
+```
+
+
 ### Detected people and held occupancy / Erkannte Personen und gehaltene Belegung
 
 Room tiles show confirmed, simultaneously visible people. **Held occupancy**

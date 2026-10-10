@@ -13,7 +13,9 @@ from homeassistant.core import State
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt as dt_util
 
+from .const import REPORT_INTERVAL
 from .geometry import distance, inside
+from .home import covers
 from .lights import LightController
 from .tracking import Presence
 
@@ -36,6 +38,7 @@ class ReplayLights(LightController):
     def __init__(self, manager, ignore_restrictions):
         super().__init__(manager)
         self.commands = []
+        self.switched = []  # decisions to switch on, for the latency report
         self.ignore_restrictions = ignore_restrictions
 
     def allowed(self, target):
@@ -60,6 +63,7 @@ class ReplayLights(LightController):
             self.hass.states.values[leaf] = State(leaf, "on" if service == "turn_on" else "off", attrs)
 
     def switch_on(self, light, targets, direction):
+        self.switched.append({"time": self.home.now, "light": light, "reason": direction})
         self.mark(light)
         factor = self.approach_factor() if direction == "approach" else 1
         for leaf, brightness in self.target_brightness(light, targets).items():
@@ -168,6 +172,130 @@ def observation(manager, home, waypoint):
     polygon = info.get("polygon")
     assigned = rid if polygon and distance(point, polygon) <= 800 else None
     return (info["floor"], point, assigned)
+
+
+WALL_REACH = 800  # mm beyond its room outline a sensor still reports someone (doorway, thin wall)
+
+
+class RadarModel:
+    """What the room sensors would report for the true positions of people.
+
+    A sensor reports only people inside its field of view and its own room
+    (plus WALL_REACH), once per report interval, each sensor at its own phase.
+    Between reports production keeps evaluating the last coordinates; so does
+    the model. Interval 0 without field of view is the ideal sensor of earlier
+    versions: everybody is seen everywhere at every step."""
+
+    def __init__(self, manager, start, interval=REPORT_INTERVAL, field_of_view=True):
+        self.manager = manager
+        self.interval = max(0.0, float(interval))
+        self.field_of_view = field_of_view
+        self.sensors = []
+        rooms = manager.home.rooms if manager.home else {}
+        for index, rid in enumerate(sorted(rooms)):
+            info = rooms[rid]
+            if not info.get("map_ready"):
+                continue
+            self.sensors.append(
+                {
+                    "room": rid,
+                    "floor": info["floor"],
+                    "polygon": info["polygon"],
+                    "transform": info["transform"],
+                    "mount": info.get("mount", "wall"),
+                    "location": info.get("sensor_location"),
+                    # Real sensors do not report in step.
+                    "next": start + self.interval * ((index * 0.37) % 1),
+                    "report": [],
+                }
+            )
+
+    def sees(self, sensor, floor, point):
+        polygon = sensor["polygon"]
+        if floor != sensor["floor"] or (not inside(point, polygon) and distance(point, polygon) > WALL_REACH):
+            return False
+        return not self.field_of_view or covers(sensor["transform"], sensor["mount"], sensor["location"], point)
+
+    def observe(self, home, now, people):
+        """people: true (floor, point) of everybody in the home."""
+        observations = []
+        for sensor in self.sensors:
+            if now + 1e-9 >= sensor["next"]:
+                sensor["report"] = [list(p) for f, p in people if self.sees(sensor, f, p)]
+                sensor["next"] = now + self.interval
+            observations.extend(
+                observation(self.manager, home, {"room": sensor["room"], "x": p[0], "y": p[1]})
+                for p in sensor["report"]
+            )
+        return observations
+
+
+class Latency:
+    """Delay between somebody really entering a room and its light decision.
+
+    `prelit`: switched on for an approach, `lit`: switched on for entering.
+    Negative values: decided before the person was through the door. Device
+    latency and the fade come on top."""
+
+    WINDOW = 15.0  # s around entering in which a decision still belongs to it
+
+    def __init__(self, manager, home, lights):
+        self.home, self.lights = home, lights
+        self.light_of = {t.entry_id: t.light for t in lights.manager.targets if t.light and t.auto_light}
+        self.labels = {rid: t.entry.title for rid, t in manager.rooms.items()}
+        self.where = {}
+        self.entries = []
+
+    def room(self, floor, point):
+        rooms = self.home.tracking.rooms
+        return next(
+            (r for r, i in rooms.items() if i["floor"] == floor and i.get("polygon") and inside(point, i["polygon"])),
+            None,
+        )
+
+    def update(self, now, people):
+        """people: person id -> true (floor, point), None while away."""
+        for pid, value in people.items():
+            room = self.room(*value) if value else None
+            if pid in self.where and self.where[pid] == room:
+                continue
+            first = pid not in self.where
+            self.where[pid] = room
+            light = self.light_of.get(room)
+            if first or light is None:
+                continue
+            self.entries.append(
+                {"person": pid, "room": room, "time": now, "light": light, "already_on": not self.lights.is_off(light)}
+            )
+
+    def report(self, start):
+        result = []
+        for index, entry in enumerate(self.entries):
+            same = [e["time"] for i, e in enumerate(self.entries) if e["light"] == entry["light"] and i != index]
+            begin = max([entry["time"] - self.WINDOW, *(t for t in same if t < entry["time"])])
+            end = min([entry["time"] + self.WINDOW, *(t for t in same if t > entry["time"])])
+
+            def first(reason, entry=entry, begin=begin, end=end):
+                times = [
+                    s["time"]
+                    for s in self.lights.switched
+                    if s["light"] == entry["light"] and s["reason"] == reason and begin < s["time"] <= end
+                ]
+                return round(min(times) - entry["time"], 2) if times else None
+
+            prelit = first("approach")
+            result.append(
+                {
+                    "person": entry["person"],
+                    "room": self.labels.get(entry["room"], entry["room"]),
+                    "time": round(entry["time"] - start, 2),
+                    # On already for someone else, not pre-lit for this person.
+                    "already_on": entry["already_on"] and (prelit is None or prelit > 0),
+                    "prelit": prelit,
+                    "lit": first("enter"),
+                }
+            )
+        return result
 
 
 def hold_off(manager):

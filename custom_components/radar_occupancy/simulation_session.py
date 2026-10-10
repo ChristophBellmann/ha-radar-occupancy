@@ -13,8 +13,11 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
+from .const import REPORT_INTERVAL
 from .lights import AUTO, LightController
-from .simulation import hold_off, make_sandbox, observation
+from .simulation import Latency, RadarModel, hold_off, make_sandbox, observation
+
+STEP = 0.25  # s between simulation steps; production evaluates on every radar report
 
 COLORS = ["#db36b4", "#ee7518", "#8548ec", "#e13f55", "#008f91", "#8b9611", "#467dea", "#98502b"]
 
@@ -24,12 +27,17 @@ class LiveLights(LightController):
         super().__init__(manager)
         self.owner = owner
         self.ignore_restrictions = ignore_restrictions
+        self.switched = []
 
     def active(self):
         return self.owner.running and self.owner.manager.home is not None and self.owner.manager.home.light_automation
 
     def allowed(self, target):
         return self.ignore_restrictions or super().allowed(target)
+
+    def switch_on(self, light, targets, direction):
+        self.switched.append({"time": self.owner.sandbox.home.now, "light": light, "reason": direction})
+        super().switch_on(light, targets, direction)
 
     @callback
     def evaluate(self, now):
@@ -49,8 +57,19 @@ class LiveLights(LightController):
 
 
 class SimulationSession:
-    def __init__(self, manager, persons, *, live_lights=False, ignore_restrictions=False):
+    def __init__(
+        self,
+        manager,
+        persons,
+        *,
+        live_lights=False,
+        ignore_restrictions=False,
+        sensor_interval=REPORT_INTERVAL,
+        field_of_view=True,
+    ):
         self.manager = manager
+        self.sensor_interval = sensor_interval
+        self.field_of_view = field_of_view
         self.live_lights = live_lights
         self.sandbox, self.unavailable = make_sandbox(manager, ignore_restrictions=ignore_restrictions)
         self.paths = []
@@ -109,21 +128,36 @@ class SimulationSession:
             for task in tasks:
                 task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
-        self.running = True
-        self.started = dt_util.utcnow().timestamp()
-        self.sandbox.home.start = self.sandbox.home.now = self.started
-        self.sandbox.lights.evaluate(self.started)
-        if self.live_lights:
-            # The test takes control of configured lamps while it runs.
-            for state in self.sandbox.lights.state.values():
-                state.owned = True
-        self._unsub = async_track_time_interval(self.manager.hass, self.tick, timedelta(seconds=0.5))
+        self.begin(dt_util.utcnow().timestamp())
+        self._unsub = async_track_time_interval(self.manager.hass, self.tick, timedelta(seconds=STEP))
 
         async def shutdown(_event):
             await self.stop()
 
         self._unsub_shutdown = self.manager.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, shutdown)
         self.tick(dt_util.utcnow())
+
+    def begin(self, now):
+        self.running = True
+        self.started = now
+        self.sandbox.home.start = self.sandbox.home.now = now
+        self.radar = RadarModel(self.manager, now, self.sensor_interval, self.field_of_view)
+        self.latency = Latency(self.manager, self.sandbox.home, self.sandbox.lights)
+        self.sandbox.lights.evaluate(now)
+        if self.live_lights:
+            # The test takes control of configured lamps while it runs.
+            for state in self.sandbox.lights.state.values():
+                state.owned = True
+
+    def run_instant(self):
+        """Run the whole walk on a virtual clock (preview only, no real lights)."""
+        start = dt_util.utcnow().timestamp()
+        self.begin(start)
+        for index in range(int(self.duration / STEP) + 1):
+            self.advance(start + index * STEP)
+        self.running = False
+        self.targets = []
+        return self.snapshot(start + self.duration)
 
     @staticmethod
     def position(path, elapsed):
@@ -149,26 +183,36 @@ class SimulationSession:
         if self.live_lights and (not self.manager.home or not self.manager.home.light_automation):
             self.manager.hass.async_create_task(self.stop())
             return
-        elapsed = max(0, now.timestamp() - self.started)
-        if elapsed > self.duration:
+        if now.timestamp() - self.started > self.duration:
             self.manager.hass.async_create_task(self.stop())
             return
-        self.sandbox.home.now = now.timestamp()
-        targets, observations = [], []
-        for person in self.paths:
-            value = self.position(person["path"], elapsed)
-            if value:
-                # Recompute sub-area membership at the interpolated position.
-                value = observation(
-                    self.manager, self.sandbox.home, {"room": value[2], "x": value[1][0], "y": value[1][1]}
-                )
-                observations.append(value)
-                targets.append({"person": person["id"], "color": person["color"], "floor": value[0], "map": value[1]})
-        self.targets = targets
-        self.sandbox.home.tracking.step(now.timestamp(), observations, hold_off(self.manager))
-        self.sandbox.lights.evaluate(now.timestamp() + 0.001)
+        self.advance(now.timestamp())
         if self.manager.home:
             self.manager.home.publish()
+
+    def advance(self, now):
+        elapsed = max(0, now - self.started)
+        self.sandbox.home.now = now
+        targets, observations, people = [], [], {}
+        ideal = not self.sensor_interval and not self.field_of_view
+        for person in self.paths:
+            value = self.position(person["path"], elapsed)
+            people[person["id"]] = (value[0], value[1]) if value else None
+            if value:
+                targets.append({"person": person["id"], "color": person["color"], "floor": value[0], "map": value[1]})
+                if ideal:
+                    # Recompute sub-area membership at the interpolated position.
+                    observations.append(
+                        observation(
+                            self.manager, self.sandbox.home, {"room": value[2], "x": value[1][0], "y": value[1][1]}
+                        )
+                    )
+        if not ideal:
+            observations = self.radar.observe(self.sandbox.home, now, [p for p in people.values() if p])
+        self.targets = targets
+        self.latency.update(now, people)
+        self.sandbox.home.tracking.step(now, observations, hold_off(self.manager))
+        self.sandbox.lights.evaluate(now + 0.001)
 
     def light_changed(self, event):
         if event.time_fired.timestamp() < self.started:
@@ -237,12 +281,16 @@ class SimulationSession:
             self.manager.home.publish()
         self.manager.evaluate()
 
-    def snapshot(self):
+    def snapshot(self, now=None):
+        now = dt_util.utcnow().timestamp() if now is None else now
+        latency = getattr(self, "latency", None)
         return {
             "running": self.running,
             "automatic": self.automatic,
             "live_lights": self.live_lights,
-            "elapsed": round(max(0, dt_util.utcnow().timestamp() - self.started), 1),
+            "sensor_interval": self.sensor_interval,
+            "field_of_view": self.field_of_view,
+            "elapsed": round(max(0, now - self.started), 1),
             "duration": self.duration,
             "targets": deepcopy(self.targets),
             "routes": [
@@ -254,6 +302,7 @@ class SimulationSession:
                 for p in self.paths
             ],
             "warnings": self.warnings,
+            "latency": latency.report(self.started) if latency else [],
             "people": dict(self.sandbox.home.tracking.counts),
             "lights": self.sandbox.lights.snapshot(),
             "unavailable_lights": self.unavailable,

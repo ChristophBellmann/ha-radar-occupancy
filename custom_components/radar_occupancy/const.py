@@ -88,6 +88,7 @@ NATIVE_FADE_STEP = 0.2  # s per interpolated device transition (5 Hz at most)
 LIGHT_SLOTS = 8  # concurrent light commands (cloud integrations have small pools)
 NEAR_FIELD = 300  # mm: targets closer to the sensor are echoes, not people
 TARGET_MAX_AGE = 5  # s: older radar coordinates are not a live target
+REPORT_INTERVAL = 1.0  # s: ESPHome publishes LD2450 coordinates about once a second (simulation)
 DEFAULT_FADE_IN = 0.0
 DEFAULT_FADE_OUT = 0.0
 

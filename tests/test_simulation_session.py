@@ -7,6 +7,7 @@ from homeassistant.core import Context
 from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.radar_occupancy import get_manager
+from custom_components.radar_occupancy.simulation import RadarModel
 from custom_components.radar_occupancy.simulation_session import SimulationSession
 from tests.test_map_mode import Flat, mock_lights
 
@@ -202,3 +203,61 @@ async def test_live_applies_brightness_to_already_on_light_then_restores(hass, f
     await hass.async_block_till_done()
     assert hass.states.get("light.bed").state == "on"
     assert hass.states.get("light.bed").attributes["brightness"] == 200
+
+
+WALK = [
+    {"room": "bed", "x": 1000, "y": 3000, "seconds": 6},
+    {"room": "bed", "x": 3500, "y": 1000, "seconds": 3},
+    {"room": "hall", "x": 5500, "y": 1000, "seconds": 2},
+    {"room": "hall", "x": 5500, "y": 1000, "seconds": 20},
+]
+
+
+def route(flat, walk):
+    return [{**w, "room": flat.entries[w["room"]].entry_id} for w in walk]
+
+
+async def measure(hass, persons, **options):
+    return await hass.services.async_call(
+        "radar_occupancy",
+        "measure_simulation",
+        {"persons": persons, "ignore_restrictions": True, **options},
+        blocking=True,
+        return_response=True,
+    )
+
+
+async def test_radar_model_reports_own_room_at_its_interval(hass, flat, monkeypatch):
+    await flat.setup(monkeypatch)
+    manager = get_manager(hass)
+    bed, hall = (flat.entries[k].entry_id for k in ("bed", "hall"))
+    model = RadarModel(manager, 0.0, interval=1.0, field_of_view=False)
+    sensors = {s["room"]: s for s in model.sensors}
+    floor = sensors[bed]["floor"]
+    # Deep inside the hall: the bedroom sensor does not see through its wall.
+    assert not model.sees(sensors[bed], floor, [6500, 1000])
+    assert model.sees(sensors[hall], floor, [6500, 1000])
+    # In the doorway both report.
+    assert model.sees(sensors[bed], floor, [4300, 1000])
+    first = model.observe(manager.home, sensors[hall]["next"], [(floor, [5000, 1000])])
+    # Between reports the last coordinates stay, as with real ESPHome sensors.
+    held = model.observe(manager.home, sensors[hall]["next"] - 0.5, [(floor, [7000, 1000])])
+    assert [o[1] for o in first if o[2] == hall] == [o[1] for o in held if o[2] == hall] == [[5000, 1000]]
+
+
+async def test_measure_reports_light_delay_after_entering(hass, flat, monkeypatch):
+    await flat.setup(monkeypatch, lights={"bed": "light.bed", "hall": "light.hall"})
+    for light in ("light.bed", "light.hall"):
+        hass.states.async_set(light, "off", {"supported_color_modes": ["brightness"]})
+    manager = get_manager(hass)
+    before = deepcopy(manager.saved)
+    ideal = await measure(hass, [{"id": "A", "route": route(flat, WALK)}], sensor_interval=0, field_of_view=False)
+    slow = await measure(hass, [{"id": "A", "route": route(flat, WALK)}], sensor_interval=1, field_of_view=False)
+    hall = next(e for e in ideal["latency"] if e["room"] == "Hall")
+    assert hall["lit"] is not None and hall["lit"] <= 2
+    slow_hall = next(e for e in slow["latency"] if e["room"] == "Hall")
+    assert slow_hall["lit"] is not None and slow_hall["lit"] >= hall["lit"]
+    assert slow["sensor_interval"] == 1 and not slow["running"]
+    assert manager.simulation is None
+    assert manager.saved == before
+    assert hass.states.get("light.hall").state == "off"

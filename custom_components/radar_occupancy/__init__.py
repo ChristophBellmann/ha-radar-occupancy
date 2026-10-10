@@ -16,7 +16,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
-from .const import CARD_URL, CONF_KIND, DOMAIN, KIND_AREA, KIND_HOME, KIND_PLAN, MAP_URL
+from .const import CARD_URL, CONF_KIND, DOMAIN, KIND_AREA, KIND_HOME, KIND_PLAN, MAP_URL, REPORT_INTERVAL
 from .manager import RadarOccupancyManager
 
 _LOGGER = logging.getLogger(__name__)
@@ -281,9 +281,40 @@ def _register_services(hass: HomeAssistant) -> None:
         supports_response=SupportsResponse.ONLY,
     )
 
-    async def start_simulation(call: ServiceCall) -> None:
+    async def walk(manager, data: dict, live_lights: bool):
         from .simulation_session import SimulationSession
 
+        persons = data.get("persons")
+        if data["automatic"] or not persons:
+            from .simulation_routes import automatic_routes, planning_snapshot
+
+            snapshot, preferred = planning_snapshot(manager, data.get("room"))
+            generated = await hass.async_add_executor_job(
+                partial(
+                    automatic_routes,
+                    snapshot,
+                    data["count"],
+                    data["duration"],
+                    seed=data.get("seed"),
+                    start_room=preferred,
+                )
+            )
+            persons = generated["persons"]
+        else:
+            generated = {}
+        session = SimulationSession(
+            manager,
+            persons,
+            live_lights=live_lights,
+            ignore_restrictions=data["ignore_restrictions"],
+            sensor_interval=data["sensor_interval"],
+            field_of_view=data["field_of_view"],
+        )
+        session.warnings = generated.get("warnings", [])
+        session.automatic = bool(generated)
+        return session
+
+    async def start_simulation(call: ServiceCall) -> None:
         manager = get_manager(hass)
         if manager.simulation:
             raise HomeAssistantError("Stop the current simulation before starting another.")
@@ -291,32 +322,7 @@ def _register_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError("An automatic walk is already being prepared.")
         manager._simulation_starting = True
         try:
-            persons = call.data.get("persons")
-            if call.data["automatic"] or not persons:
-                from .simulation_routes import automatic_routes, planning_snapshot
-
-                snapshot, preferred = planning_snapshot(manager, call.data.get("room"))
-                generated = await hass.async_add_executor_job(
-                    partial(
-                        automatic_routes,
-                        snapshot,
-                        call.data["count"],
-                        call.data["duration"],
-                        seed=call.data.get("seed"),
-                        start_room=preferred,
-                    )
-                )
-                persons = generated["persons"]
-            else:
-                generated = {}
-            session = SimulationSession(
-                manager,
-                persons,
-                live_lights=call.data["live_lights"],
-                ignore_restrictions=call.data["ignore_restrictions"],
-            )
-            session.warnings = generated.get("warnings", [])
-            session.automatic = bool(generated)
+            session = await walk(manager, call.data, call.data["live_lights"])
             manager.simulation = session
             try:
                 await session.start()
@@ -326,37 +332,52 @@ def _register_services(hass: HomeAssistant) -> None:
         finally:
             manager._simulation_starting = False
 
+    async def measure_simulation(call: ServiceCall) -> dict:
+        """The same walk on a virtual clock, at once: occupancy and light decisions only."""
+        try:
+            session = await walk(get_manager(hass), call.data, False)
+        except KeyError as err:
+            raise HomeAssistantError("Unknown room in simulation route.") from err
+        return session.run_instant()
+
     async def stop_simulation(call: ServiceCall) -> None:
         manager = get_manager(hass)
         if manager.simulation:
             await manager.simulation.stop()
 
+    walk_schema = {
+        vol.Optional("persons"): vol.All(
+            [
+                vol.Schema(
+                    {
+                        vol.Required("id"): vol.All(cv.string, vol.Length(min=1, max=40)),
+                        vol.Required("route"): vol.All([waypoint], vol.Length(min=1, max=30)),
+                    }
+                )
+            ],
+            vol.Length(min=1, max=8),
+        ),
+        vol.Optional("automatic", default=False): cv.boolean,
+        vol.Optional("count", default=2): vol.All(vol.Coerce(int), vol.Range(min=1, max=8)),
+        vol.Optional("duration", default=180): vol.All(vol.Coerce(int), vol.Range(min=30, max=900)),
+        vol.Optional("seed"): vol.All(vol.Coerce(int), vol.Range(min=0, max=2147483647)),
+        vol.Optional("room"): cv.string,
+        vol.Optional("ignore_restrictions", default=False): cv.boolean,
+        vol.Optional("sensor_interval", default=REPORT_INTERVAL): vol.All(vol.Coerce(float), vol.Range(min=0, max=5)),
+        vol.Optional("field_of_view", default=True): cv.boolean,
+    }
     hass.services.async_register(
         DOMAIN,
         "start_simulation",
         start_simulation,
-        schema=vol.Schema(
-            {
-                vol.Optional("persons"): vol.All(
-                    [
-                        vol.Schema(
-                            {
-                                vol.Required("id"): vol.All(cv.string, vol.Length(min=1, max=40)),
-                                vol.Required("route"): vol.All([waypoint], vol.Length(min=1, max=30)),
-                            }
-                        )
-                    ],
-                    vol.Length(min=1, max=8),
-                ),
-                vol.Optional("automatic", default=False): cv.boolean,
-                vol.Optional("count", default=2): vol.All(vol.Coerce(int), vol.Range(min=1, max=8)),
-                vol.Optional("duration", default=180): vol.All(vol.Coerce(int), vol.Range(min=30, max=900)),
-                vol.Optional("seed"): vol.All(vol.Coerce(int), vol.Range(min=0, max=2147483647)),
-                vol.Optional("room"): cv.string,
-                vol.Optional("live_lights", default=False): cv.boolean,
-                vol.Optional("ignore_restrictions", default=False): cv.boolean,
-            }
-        ),
+        schema=vol.Schema({**walk_schema, vol.Optional("live_lights", default=False): cv.boolean}),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "measure_simulation",
+        measure_simulation,
+        schema=vol.Schema(walk_schema),
+        supports_response=SupportsResponse.ONLY,
     )
     hass.services.async_register(DOMAIN, "stop_simulation", stop_simulation, schema=vol.Schema({}))
 
