@@ -236,6 +236,28 @@ class PresenceTests(unittest.TestCase):
         self.assertEqual(self.p.count("Schlafzimmer"), 1)
         self.assertEqual(self.p.count("Gang"), 0)
 
+    def test_own_radar_seeing_through_doorway_moves_person_promptly(self):
+        # The bedroom radar still reports the person 40 cm into the hall and
+        # keeps calling it its own room; the measured crossing decides.
+        self.p.configure(ROOMS, doors(gang_covered=False))
+        path = self.walk([1500, 1000], [4400, 1000], 6)
+        for point in path:
+            self.t += 0.5
+            self.p.step(self.t, [("oben", point, "Schlafzimmer")])
+        self.t += 0.5
+        self.p.step(self.t, [("oben", path[-1], "Schlafzimmer")])
+        self.assertEqual(self.p.count("Gang"), 1)
+        self.assertEqual(self.p.count("Schlafzimmer"), 0)
+
+    def test_own_radar_near_wall_outside_door_keeps_room(self):
+        # Beyond the outline but nowhere near the door: a wall, not a passage.
+        self.p.configure(ROOMS, doors(gang_covered=False))
+        for point in self.walk([3000, 3000], [4500, 3000], 6) + [[4500, 3000]] * 4:
+            self.t += 0.5
+            self.p.step(self.t, [("oben", point, "Schlafzimmer")])
+        self.assertEqual(self.p.count("Schlafzimmer"), 1)
+        self.assertEqual(self.p.count("Gang"), 0)
+
     def test_jitter_across_door_outline_does_not_release_room(self):
         self.run_path([[3500, 1000]] * 4 + [[4100, 1000], [3900, 1000]] * 8)
         self.assertEqual(self.p.count("Schlafzimmer"), 1)

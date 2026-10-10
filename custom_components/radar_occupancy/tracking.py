@@ -347,6 +347,14 @@ class Presence:
         track.history.append((now, point))
         del track.history[:-40]
         room = forced or self.room_at(floor, point)
+        if forced and forced == track.room:
+            # The radar of the room being left keeps its own room at uncertain
+            # edges, but it often still sees a few decimetres through the
+            # doorway. Clearly beyond, the passage checks below decide; waiting
+            # for the track to end cost seconds of darkness on the other side.
+            beyond = self.room_at(floor, point)
+            if beyond and beyond != forced and self.door_between(forced, beyond):
+                room = beyond
         if room is None or room == track.room:
             track.pending = None
             return

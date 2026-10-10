@@ -8,6 +8,10 @@
   (default 1 s, the LD2450 rate in ESPHome), keeping the last coordinates in
   between. Blind corners such as the area in front of a bathroom door stay
   blind. The model follows five days of recorded LD2450 positions.
+- Leaving a room is recognised as soon as its own radar sees the person
+  clearly beyond the doorway (at least 20 cm into the next room, crossing
+  measured at the door). Before, that radar kept calling the target its own
+  room until the track ended, about four seconds of darkness next door.
 - New response action `measure_simulation`: the same walks on a virtual clock,
   returning per room entry how many seconds after entering the light was
   pre-lit and switched on. Simulation snapshots carry the same `latency` list.
