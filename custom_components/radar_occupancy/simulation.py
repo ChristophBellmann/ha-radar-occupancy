@@ -273,7 +273,7 @@ class RadarModel:
                 sensor["report"] = [list(p) for f, p in people if self.sees(sensor, f, p)]
                 sensor["next"] = now + self.interval
             observations.extend(
-                observation(self.manager, home, {"room": sensor["room"], "x": p[0], "y": p[1]})
+                (*observation(self.manager, home, {"room": sensor["room"], "x": p[0], "y": p[1]}), sensor["room"])
                 for p in sensor["report"]
             )
         return observations

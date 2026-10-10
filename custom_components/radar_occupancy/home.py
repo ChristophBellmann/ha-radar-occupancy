@@ -381,7 +381,7 @@ class Home:
                     # imprecise projected target must not start in a neighbour
                     # and bypass the doorway-crossing checks altogether.
                     assigned = t.get("area") or (room_id if t["distance"] <= 800 else None)
-                    observations.append((camera, t["map"], assigned))
+                    observations.append((camera, t["map"], assigned, room_id))
                 for aid, area in sub_areas:
                     presence_rooms[aid] = {"floor": camera, "polygon": None, "parent": room_id}
                     labels[aid] = area.entry.title

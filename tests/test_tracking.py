@@ -275,6 +275,22 @@ class PresenceTests(unittest.TestCase):
         self.assertEqual(self.p.count("Schlafzimmer"), 1)
         self.assertEqual(self.p.count("Gang"), 0)
 
+    def test_approach_seen_by_radar_ahead_expects_that_room(self):
+        # Walking along the hall to the bathroom door; the bathroom radar sees
+        # through its door and reports the person: that room lights fully.
+        for point in self.walk([5000, 1000], [7400, 1000], 6):
+            self.t += 0.5
+            self.p.step(self.t, [("oben", point, None, "Bad")])
+        self.assertEqual(self.p.expected.get("Bad"), self.t)
+        self.assertEqual(self.p.count("Bad"), 0)
+
+    def test_approach_seen_only_by_own_radar_just_pre_lights(self):
+        for point in self.walk([5000, 1000], [7400, 1000], 6):
+            self.t += 0.5
+            self.p.step(self.t, [("oben", point, None, "Gang")])
+        self.assertEqual(self.p.approaching.get("Bad"), self.t)
+        self.assertNotIn("Bad", self.p.expected)
+
     def test_jitter_across_door_outline_does_not_release_room(self):
         self.run_path([[3500, 1000]] * 4 + [[4100, 1000], [3900, 1000]] * 8)
         self.assertEqual(self.p.count("Schlafzimmer"), 1)

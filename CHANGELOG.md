@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.17
+
+- Walking towards a door while the radar of the room ahead already sees you
+  through that door lights the room at full brightness instead of the dim
+  pre-light. Simulated on a two-floor flat: the bathroom light comes on 0.75 s
+  before entering instead of 1.1 s after; mean delay over random walks 0.53
+  instead of 1.0 s, with about 15 % more switch-ons for people walking past an
+  open door (they fade out after the pre-light time). Observations now carry
+  the reporting sensor.
+
 ## 0.3.16
 
 - "Light off" by voice, app or automation right after the light came on for

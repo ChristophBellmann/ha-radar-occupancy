@@ -212,7 +212,8 @@ other available floors follow afterwards. The order stays stable after restarts.
    the front door. Robot maps bring outlines and doors; correct them if needed.
 
 Distorted calibrations are detected; such rooms keep their distance rule.
-Walking towards a door pre-lights the room behind it (dim). Where no sensor
+Walking towards a door pre-lights the room behind it (dim); at full brightness
+when that room's own radar already sees the person coming through its door. Where no sensor
 sees behind a door, someone the radar loses at that door while walking towards
 it gets the room ahead lit at full brightness at once; occupancy only moves with
 evidence, so a person who stayed at the door keeps their room, and the light

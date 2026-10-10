@@ -86,6 +86,7 @@ class Track:
         self.pending_since = None
         self.birth_point = point
         self.room_since = now
+        self.sensors = frozenset()  # rooms whose radar reported the last position
 
     def age(self, now):
         return now - self.born
@@ -235,6 +236,7 @@ class Presence:
             if j not in used_obs:
                 room = obs[2] if len(obs) > 2 and obs[2] else self.room_at(obs[0], obs[1])
                 track = Track(obs[0], obs[1], room, now)
+                track.sensors = obs[3] if len(obs) > 3 else frozenset()
                 self._reacquire(track)
                 self.tracks.append(track)
         for track in list(self.tracks):
@@ -306,15 +308,17 @@ class Presence:
         for obs in observations:
             floor, point = obs[0], list(obs[1])
             forced = obs[2] if len(obs) > 2 else None
+            sensor = obs[3] if len(obs) > 3 else None
             for group in merged:
                 if group["floor"] == floor and group["room"] == forced and math.dist(group["point"], point) < MERGE:
                     n = group["n"]
                     group["point"] = [(group["point"][k] * n + point[k]) / (n + 1) for k in range(2)]
                     group["n"] += 1
+                    group["sensors"] |= {sensor} - {None}
                     break
             else:
-                merged.append({"floor": floor, "point": point, "room": forced, "n": 1})
-        return [(g["floor"], g["point"], g["room"]) for g in merged]
+                merged.append({"floor": floor, "point": point, "room": forced, "n": 1, "sensors": {sensor} - {None}})
+        return [(g["floor"], g["point"], g["room"], frozenset(g["sensors"])) for g in merged]
 
     def _can_match(self, track, obs, now):
         """A trusted sighting in another room must not refresh a stuck track.
@@ -324,7 +328,7 @@ class Presence:
         there instead of reporting the old room as visibly occupied forever.
         Unassigned wall echoes continue to use the strict crossing checks.
         """
-        _, point, forced = obs
+        _, point, forced = obs[:3]
         if not forced or forced == track.room or track.room is None:
             return True
         source = self.rooms.get(track.room, {}).get("polygon")
@@ -360,7 +364,8 @@ class Presence:
         return False
 
     def _move(self, track, obs, now):
-        floor, point, forced = obs
+        floor, point, forced = obs[:3]
+        track.sensors = obs[3] if len(obs) > 3 else frozenset()
         previous = track.point
         track.point, track.seen = point, now
         track.history.append((now, point))
@@ -562,6 +567,10 @@ class Presence:
                     other = door.other(track.room)
                     if other in self.rooms:
                         self.approaching[other] = now
+                        if other in track.sensors and d <= DOOR_NEAR:
+                            # The radar of the room ahead already sees them
+                            # coming through its door: light it fully.
+                            self.expected[other] = now
 
     def snapshot(self, now):
         return {
