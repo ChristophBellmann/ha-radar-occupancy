@@ -309,6 +309,7 @@ def _register_services(hass: HomeAssistant) -> None:
             ignore_restrictions=data["ignore_restrictions"],
             sensor_interval=data["sensor_interval"],
             field_of_view=data["field_of_view"],
+            see_through_doors=data["see_through_doors"],
         )
         session.warnings = generated.get("warnings", [])
         session.automatic = bool(generated)
@@ -365,6 +366,7 @@ def _register_services(hass: HomeAssistant) -> None:
         vol.Optional("ignore_restrictions", default=False): cv.boolean,
         vol.Optional("sensor_interval", default=REPORT_INTERVAL): vol.All(vol.Coerce(float), vol.Range(min=0, max=5)),
         vol.Optional("field_of_view", default=True): cv.boolean,
+        vol.Optional("see_through_doors", default=True): cv.boolean,
     }
     hass.services.async_register(
         DOMAIN,

@@ -178,6 +178,9 @@ async def test_live_two_people_last_exit_switches_off(hass, flat, monkeypatch):
             },
         ],
         live_lights=True,
+        # Light logic for two people; ideal sensors keep the passages measured.
+        sensor_interval=0,
+        field_of_view=False,
     )
     await elapsed(flat, 16)
     assert session.sandbox.home.people(bed) == 1

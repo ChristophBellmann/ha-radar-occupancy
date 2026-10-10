@@ -66,10 +66,12 @@ class SimulationSession:
         ignore_restrictions=False,
         sensor_interval=REPORT_INTERVAL,
         field_of_view=True,
+        see_through_doors=True,
     ):
         self.manager = manager
         self.sensor_interval = sensor_interval
         self.field_of_view = field_of_view
+        self.see_through_doors = see_through_doors
         self.live_lights = live_lights
         self.sandbox, self.unavailable = make_sandbox(manager, ignore_restrictions=ignore_restrictions)
         self.paths = []
@@ -141,7 +143,7 @@ class SimulationSession:
         self.running = True
         self.started = now
         self.sandbox.home.start = self.sandbox.home.now = now
-        self.radar = RadarModel(self.manager, now, self.sensor_interval, self.field_of_view)
+        self.radar = RadarModel(self.manager, now, self.sensor_interval, self.field_of_view, self.see_through_doors)
         self.latency = Latency(self.manager, self.sandbox.home, self.sandbox.lights)
         self.sandbox.lights.evaluate(now)
         if self.live_lights:
@@ -290,6 +292,7 @@ class SimulationSession:
             "live_lights": self.live_lights,
             "sensor_interval": self.sensor_interval,
             "field_of_view": self.field_of_view,
+            "see_through_doors": self.see_through_doors,
             "elapsed": round(max(0, now - self.started), 1),
             "duration": self.duration,
             "targets": deepcopy(self.targets),

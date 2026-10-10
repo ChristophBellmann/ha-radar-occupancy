@@ -478,12 +478,14 @@ stellt bei aktivem Lichttest die vorherigen Lampenzustände wieder her.
 ### Realistic radars and light delay / Realistische Radare und Lichtverzögerung
 
 Simulated radars behave like the real ones: each sensor reports only people in
-its field of view and its own room (plus 80 cm for the doorway), and only every
-`sensor_interval` seconds (default 1 s, ESPHome's LD2450 rate); in between the
-last coordinates stay. Corners no sensor sees, such as the area in front of a
-bathroom door, therefore stay blind in the simulation as well.
-`sensor_interval: 0` with `field_of_view: false` gives the ideal sensor of
-earlier versions.
+its field of view (7 m, ±60°) in its own room and on the threshold of its doors,
+and only every `sensor_interval` seconds (default 1 s, ESPHome's LD2450 rate);
+in between the last coordinates stay. With `see_through_doors` (default) a
+sensor also sees further along a line of sight through an open doorway;
+switched off, the simulation gives the cautious bound for closed or angled
+doors. Corners no sensor sees, such as the area in front of a bathroom door,
+stay blind in the simulation as well. `sensor_interval: 0` with
+`field_of_view: false` gives the ideal sensor of earlier versions.
 
 `measure_simulation` runs the same walks at once on a virtual clock and returns
 `latency`: for every time a person really entered a room with a light, when the

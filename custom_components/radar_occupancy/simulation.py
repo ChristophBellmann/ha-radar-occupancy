@@ -6,6 +6,7 @@ Fades are reported as intentions, not hardware timing measurements.
 
 from __future__ import annotations
 
+import math
 from copy import copy, deepcopy
 from types import SimpleNamespace
 
@@ -174,24 +175,35 @@ def observation(manager, home, waypoint):
     return (info["floor"], point, assigned)
 
 
-WALL_REACH = 800  # mm beyond its room outline a sensor still reports someone (doorway, thin wall)
+DOORWAY = 450  # mm: a line of sight leaving the room this close to a door passes the doorway
+THRESHOLD = 800  # mm around a door point that the room's own sensor always sees
+# The LD2450 itself: 99 % of a hall sensor's reports lay within 7 m, all within
+# its ±60° cone. Door coverage in production stays more cautious (5 m, 55°).
+SENSOR_REACH = 7000
+SENSOR_HALF_ANGLE = 60
 
 
 class RadarModel:
     """What the room sensors would report for the true positions of people.
 
-    A sensor reports only people inside its field of view and its own room
-    (plus WALL_REACH), once per report interval, each sensor at its own phase.
+    A sensor reports only people inside its field of view: in its own room,
+    on the threshold of its doors and, with `through_doors`, further out along
+    a line of sight through a doorway. Recorded LD2450 data shows both: one
+    bathroom radar saw far into the hall, a kitchen radar only its threshold
+    (door angle, half-closed doors). Reports come once per interval, each
+    sensor at its own phase.
     Between reports production keeps evaluating the last coordinates; so does
     the model. Interval 0 without field of view is the ideal sensor of earlier
     versions: everybody is seen everywhere at every step."""
 
-    def __init__(self, manager, start, interval=REPORT_INTERVAL, field_of_view=True):
+    def __init__(self, manager, start, interval=REPORT_INTERVAL, field_of_view=True, through_doors=True):
         self.manager = manager
+        self.through_doors = through_doors
         self.interval = max(0.0, float(interval))
         self.field_of_view = field_of_view
         self.sensors = []
         rooms = manager.home.rooms if manager.home else {}
+        doors = manager.home.tracking.doors if manager.home else []
         for index, rid in enumerate(sorted(rooms)):
             info = rooms[rid]
             if not info.get("map_ready"):
@@ -204,6 +216,7 @@ class RadarModel:
                     "transform": info["transform"],
                     "mount": info.get("mount", "wall"),
                     "location": info.get("sensor_location"),
+                    "doors": [d.point for d in doors if rid in (d.a, d.b) and d.point and d.floor == info["floor"]],
                     # Real sensors do not report in step.
                     "next": start + self.interval * ((index * 0.37) % 1),
                     "report": [],
@@ -211,10 +224,43 @@ class RadarModel:
             )
 
     def sees(self, sensor, floor, point):
-        polygon = sensor["polygon"]
-        if floor != sensor["floor"] or (not inside(point, polygon) and distance(point, polygon) > WALL_REACH):
+        if floor != sensor["floor"]:
             return False
-        return not self.field_of_view or covers(sensor["transform"], sensor["mount"], sensor["location"], point)
+        if not (
+            inside(point, sensor["polygon"])
+            or any(math.dist(point, door) <= THRESHOLD for door in sensor["doors"])
+            or (self.through_doors and self.through_door(sensor, point))
+        ):
+            return False
+        return not self.field_of_view or covers(
+            sensor["transform"], sensor["mount"], sensor["location"], point, SENSOR_REACH, SENSOR_HALF_ANGLE
+        )
+
+    @staticmethod
+    def through_door(sensor, point):
+        """Does the line of sight leave the room through one of its doorways?"""
+        if sensor["mount"] == "ceiling":
+            origin = sensor["location"]
+        else:
+            (_, _, c), (_, _, f) = sensor["transform"]
+            origin = [c, f]
+        if not origin or not sensor["doors"]:
+            return False
+        polygon = sensor["polygon"]
+        dx, dy = point[0] - origin[0], point[1] - origin[1]
+        crossings = []
+        for c, d in zip(polygon, polygon[1:] + polygon[:1]):
+            ex, ey = d[0] - c[0], d[1] - c[1]
+            det = dx * ey - dy * ex
+            if abs(det) < 1e-9:
+                continue
+            cx, cy = c[0] - origin[0], c[1] - origin[1]
+            along, edge = (cx * ey - cy * ex) / det, (cx * dy - cy * dx) / det
+            if 0 < along <= 1 and 0 <= edge <= 1:
+                crossings.append([origin[0] + along * dx, origin[1] + along * dy])
+        return bool(crossings) and all(
+            any(math.dist(x, door) <= DOORWAY for door in sensor["doors"]) for x in crossings
+        )
 
     def observe(self, home, now, people):
         """people: true (floor, point) of everybody in the home."""

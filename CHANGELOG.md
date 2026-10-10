@@ -3,9 +3,11 @@
 ## 0.3.13
 
 - Simulated radars report like real ones: only people in their field of view
-  and own room (doorway included), once per `sensor_interval` (default 1 s,
-  the LD2450 rate in ESPHome), keeping the last coordinates in between. Blind
-  corners such as the area in front of a bathroom door stay blind.
+  (7 m, ±60°), own room and door thresholds, optionally along a line of sight
+  through open doorways (`see_through_doors`), once per `sensor_interval`
+  (default 1 s, the LD2450 rate in ESPHome), keeping the last coordinates in
+  between. Blind corners such as the area in front of a bathroom door stay
+  blind. The model follows five days of recorded LD2450 positions.
 - New response action `measure_simulation`: the same walks on a virtual clock,
   returning per room entry how many seconds after entering the light was
   pre-lit and switched on. Simulation snapshots carry the same `latency` list.

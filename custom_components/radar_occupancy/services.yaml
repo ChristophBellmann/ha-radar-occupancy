@@ -228,7 +228,12 @@ start_simulation:
           step: 0.05
           mode: box
     field_of_view: &field_of_view
-      description: A radar only sees people in its field of view and its own room (with doorway). Off sees everybody everywhere, like earlier versions.
+      description: A radar only sees people in its field of view, its own room and on the threshold of its doors. Off sees everybody everywhere, like earlier versions.
+      default: true
+      selector:
+        boolean:
+    see_through_doors: &see_through_doors
+      description: A radar also sees beyond its doors along a line of sight through the open doorway. Off is the cautious bound (closed or angled doors).
       default: true
       selector:
         boolean:
@@ -276,6 +281,7 @@ measure_simulation:
         boolean:
     sensor_interval: *sensor_interval
     field_of_view: *field_of_view
+    see_through_doors: *see_through_doors
 stop_simulation:
   name: Stop animated simulation
   description: Stop animation and restore light states if real light control was enabled.
