@@ -13,6 +13,7 @@ from datetime import timedelta
 import pytest
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import Context, HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 
 from custom_components.radar_occupancy import home as home_module
@@ -679,3 +680,26 @@ async def test_lost_at_unseen_door_lights_next_room_without_moving_anyone(
     await flat.idle(25)
     assert hass.states.get("light.hall").state == "off"
     assert hass.states.get("light.bed").state == "on"
+
+
+async def test_map_that_failed_at_start_is_loaded_again(hass: HomeAssistant, flat: Flat, monkeypatch) -> None:
+    # The robot's camera entity exists but is not ready yet when the maps load.
+    attempts = []
+
+    async def flaky_load(hass_, camera, neighbours):
+        attempts.append(camera)
+        if len(attempts) == 1:
+            raise HomeAssistantError("Camera not found")
+        return FLOOR
+
+    await flat.setup(monkeypatch)
+    manager = hass.data[DOMAIN]
+    monkeypatch.setattr(home_module, "async_load_floor", flaky_load)
+    manager.home.floors.clear()
+    manager.home.reload_maps()
+    await hass.async_block_till_done()
+    assert manager.home.errors
+    for _ in range(16):
+        await flat.tick(1)
+    assert not manager.home.errors
+    assert manager.home.floors

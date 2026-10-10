@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.15
+
+- A map that failed to load is tried again every 15 seconds. After a restart
+  the robot's camera entity can exist before it serves its map ("Camera not
+  found"); that floor's rooms then stayed on the distance rule until the map
+  changed or `refresh_maps` was called.
+
 ## 0.3.14
 
 - Leaving a room is recognised as soon as its own radar sees the person

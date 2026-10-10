@@ -50,6 +50,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 _TO_MM = {"mm": 1.0, "cm": 10.0, "m": 1000.0}
+MAP_RETRY = 15  # s between attempts to load a map that failed (camera not ready at start)
 
 
 def _number(state: State | None) -> float | None:
@@ -432,6 +433,10 @@ class RadarOccupancyManager:
             # Light groups that appeared after the start: follow their members too.
             self._subscribe()
         if self.home:
+            if self.home.errors and self._ticks % MAP_RETRY == 0:
+                # A camera that was not ready at start never changes state
+                # in a way that triggers a reload; ask again.
+                self.home.reload_maps()
             self.home.update()
         self.evaluate(dt_util.utcnow().timestamp())
 
