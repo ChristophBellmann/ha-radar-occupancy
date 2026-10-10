@@ -201,6 +201,11 @@ class Home:
             return False
         return dt_util.utcnow().timestamp() - self.tracking.approaching.get(entry_id, -1e9) <= 2
 
+    def expected(self, entry_id: str) -> bool:
+        if not self.uses_map(entry_id):
+            return False
+        return dt_util.utcnow().timestamp() - self.tracking.expected.get(entry_id, -1e9) <= 2
+
     def release(self, entry_id: str) -> None:
         self.tracking.reset(entry_id, dt_util.utcnow().timestamp())
         for area_id, area in self.manager.areas.items():

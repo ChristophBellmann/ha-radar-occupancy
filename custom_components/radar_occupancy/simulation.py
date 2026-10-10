@@ -114,6 +114,9 @@ class ReplayHome:
     def approaching(self, room):
         return self.now - self.tracking.approaching.get(room, -1e9) <= 2
 
+    def expected(self, room):
+        return self.now - self.tracking.expected.get(room, -1e9) <= 2
+
 
 def make_sandbox(manager, *, held=False, ignore_restrictions=False):
     """Create independent occupancy and light decision state."""

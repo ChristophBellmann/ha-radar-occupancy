@@ -236,6 +236,23 @@ class PresenceTests(unittest.TestCase):
         self.assertEqual(self.p.count("Schlafzimmer"), 1)
         self.assertEqual(self.p.count("Gang"), 0)
 
+    def test_drop_inside_near_unseen_door_expects_the_other_side(self):
+        # Lost at the door: the hall may light up at once, the bedroom stays held.
+        self.p.configure(ROOMS, doors(gang_covered=False))
+        self.run_path(self.walk([1500, 1000], [3700, 1000], 6))
+        self.idle(0.5)
+        self.assertEqual(self.p.expected.get("Gang"), self.t)
+        self.assertNotIn("Bad", self.p.expected)
+        self.idle(60)
+        self.assertEqual(self.p.count("Schlafzimmer"), 1)
+        self.assertEqual(self.p.count("Gang"), 0)
+
+    def test_sitting_still_inside_expects_nothing(self):
+        self.p.configure(ROOMS, doors(gang_covered=False))
+        self.run_path([[1500, 1000]] * 6)
+        self.idle(10)
+        self.assertEqual(self.p.expected, {})
+
     def test_own_radar_seeing_through_doorway_moves_person_promptly(self):
         # The bedroom radar still reports the person 40 cm into the hall and
         # keeps calling it its own room; the measured crossing decides.

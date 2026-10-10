@@ -649,3 +649,33 @@ async def test_hall_light_on_after_a_short_errand(hass: HomeAssistant, flat: Fla
     await flat.idle(20 * 60)
     await flat.walk(line([6000, 150], [5500, 1000], 6) + [[5500, 1000]] * 3)
     assert hass.states.get("light.hall").state == "on", "coming in from outside ends switched off by hand"
+
+
+async def test_lost_at_unseen_door_lights_next_room_without_moving_anyone(
+    hass: HomeAssistant, flat: Flat, monkeypatch
+) -> None:
+    # No sensor sees behind the doors: whoever vanishes at the bedroom door
+    # walking towards it gets the hall lit at once, at full brightness.
+    monkeypatch.setattr(home_module, "covers", lambda *args, **kwargs: False)
+    real_sleep = asyncio.sleep
+
+    async def no_wait(_seconds):  # the frozen clock would never let a fade step pass
+        await real_sleep(0)
+
+    monkeypatch.setattr(lights_module.asyncio, "sleep", no_wait)
+    calls = mock_lights(hass)
+    for light in ("light.bed", "light.hall"):
+        hass.states.async_set(light, "off", {"supported_color_modes": ["brightness"]})
+    await flat.setup(monkeypatch, lights={"bed": "light.bed", "hall": "light.hall"})
+    await flat.walk([[1500, 1000]] * 4 + line([1500, 1000], [3700, 1000], 5))
+    calls.clear()
+    await flat.idle(2)
+    hall = [c[1] for c in calls if c[0] == "on" and c[1]["entity_id"] == "light.hall"]
+    assert hall and hall[-1]["brightness_pct"] == 40
+    # Nobody counted in the hall, the bedroom stays held with its light on.
+    assert flat.occupied("bed") and not flat.occupied("hall")
+    assert hass.states.get("light.bed").state == "on"
+    # Nobody turns up: the hall fades out like a pre-light.
+    await flat.idle(25)
+    assert hass.states.get("light.hall").state == "off"
+    assert hass.states.get("light.bed").state == "on"

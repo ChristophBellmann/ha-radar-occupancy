@@ -103,6 +103,7 @@ class Presence:
         self.events = []
         self.reasons = {}  # room -> {"code": ..., "from": room key, "to": room key}
         self.approaching = {}  # room -> time of the last approach to its door
+        self.expected = {}  # room -> time someone vanished at its unseen door, walking towards it
         self.arrivals = {}  # room -> time someone last came in through a door
         self.arrived_from = {}  # room -> where that person came from (OUTSIDE: into the home)
         self.vanished = {}  # room -> time a counted person last vanished without leaving
@@ -229,6 +230,7 @@ class Presence:
             used_tracks.add(i)
             used_obs.add(j)
             self._move(alive[i], merged[j], now)
+        self._expect(now, alive, used_tracks)
         for j, obs in enumerate(merged):
             if j not in used_obs:
                 room = obs[2] if len(obs) > 2 and obs[2] else self.room_at(obs[0], obs[1])
@@ -255,6 +257,23 @@ class Presence:
                 self.reasons[room] = {"code": HOLD_OFF, "from": None, "to": None}
         self._limit(now, seen_now)
         self._approach(now)
+
+    def _expect(self, now, alive, matched):
+        """Somebody just lost at a door into a room no sensor sees behind it.
+
+        Nothing will confirm the passage before the track ends, and a dropout
+        at the door does not release the room either. The room ahead may still
+        light up at once: its count does not change, so a person who in fact
+        stayed loses nothing."""
+        for i, track in enumerate(alive):
+            if i in matched or not track.counted or track.room is None:
+                continue
+            door = self._door_near(track, track.seen, True)
+            if door is None:
+                continue
+            other = door.other(track.room)
+            if other in self.rooms and not door.covered_into(other):
+                self.expected[other] = now
 
     def _limit(self, now, seen):
         """Never count more people than live in the home.

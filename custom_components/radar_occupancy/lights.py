@@ -93,6 +93,7 @@ class LightState:
     was_allowed: bool | None = None  # light rule (dark, time window) at the last evaluation
     allowed_pending: bool = False  # became allowed while occupied: next sighting switches on
     prelit_since: float | None = None
+    prelit_full: bool = False  # pre-lit at full brightness for an expected arrival
     last_off_try: float | None = None
     off_task: asyncio.Task | None = None
 
@@ -308,16 +309,28 @@ class LightController:
     def approach(self, light: str, st: LightState, targets: list[Target], now: float) -> None:
         home = self.home
         approaching = bool(home) and any(home.approaching(t.entry_id) for t in targets)
+        expected = bool(home) and any(home.expected(t.entry_id) for t in targets)
         if (
+            expected
+            and st.mode == AUTO
+            and (self.is_off(light) or (st.prelit_since and not st.prelit_full))
+            and any(self.allowed(t) for t in targets)
+        ):
+            # Lost at the door to this room and nobody can see the other side:
+            # light it as for entering; it fades out like a pre-light if
+            # nobody turns up.
+            st.prelit_since, st.prelit_full = now, True
+            self.switch_on(light, targets, "enter")
+        elif (
             approaching
             and st.mode == AUTO
             and not st.prelit_since
             and self.is_off(light)
             and any(self.allowed(t) for t in targets)
         ):
-            st.prelit_since = now
+            st.prelit_since, st.prelit_full = now, False
             self.switch_on(light, targets, "approach")
-        elif st.prelit_since and not approaching and now - st.prelit_since >= const.PRELIT_TIMEOUT:
+        elif st.prelit_since and not approaching and not expected and now - st.prelit_since >= const.PRELIT_TIMEOUT:
             st.prelit_since = None
             if self.hass.states.is_state(light, STATE_ON):
                 self.start_fade(light, targets, "off")
