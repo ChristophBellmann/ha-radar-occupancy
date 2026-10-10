@@ -8,6 +8,10 @@
   kept the light automatic and switched it on again at the next entering; a
   fade still running could also pull the lamp up again. The `light.turn_off`
   call itself is now the evidence.
+- "Switched off by hand" no longer ends because a room was empty for 30
+  minutes unless somebody evidently left it (door, out of the home, release,
+  hold off). A sleeper unseen for hours and dropped by the household limit
+  made the bedroom "empty"; turning over later switched the light on at night.
 
 ## 0.3.15
 

@@ -10,7 +10,9 @@ States per light:
 * manual_off: someone switched the light off while the room was occupied.
   It stays off, also after leaving briefly (to the bathroom at night and
   back) and while someone in bed turns over. Ends when the light is switched
-  on again from outside, when the room was empty for the configured time,
+  on again from outside, when the room was empty for the configured time
+  after somebody evidently left (not a sleeper dropped by the household
+  limit),
   when someone comes in through a door after nobody was seen there for that
   time (a held count must not keep the light off forever), or at once when
   someone comes into the home from outside through this room.
@@ -54,6 +56,8 @@ _LOGGER = logging.getLogger(__name__)
 
 AUTO = "auto"
 MANUAL_OFF = "manual_off"
+# Reasons for an empty room that are evidence of leaving (map and distance rule).
+LEFT = {"moved", "went_out", "released", "hold_off", "left_through_door", "handed_over"}
 TRANSITION = 32  # LightEntityFeature.TRANSITION
 
 
@@ -252,7 +256,10 @@ class LightController:
         Only absence ends it, never movement inside the room: a sleeper
         turning over must not bring the light back."""
         reset = self.manual_off_reset()
-        empty_long = not occupied and st.empty_since is not None and now - st.empty_since >= reset
+        # Empty only counts when somebody evidently left: a sleeper dropped by
+        # the household limit or a safety timeout is still in bed.
+        left = all(getattr(t, "reason", None) in LEFT for t in targets)
+        empty_long = left and not occupied and st.empty_since is not None and now - st.empty_since >= reset
         absent_long = st.manual_absent_since is not None and now - st.manual_absent_since >= reset
         if empty_long or (new_arrival and absent_long):
             st.mode, st.manual_absent_since = AUTO, None

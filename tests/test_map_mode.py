@@ -732,3 +732,31 @@ async def test_voice_off_right_after_switch_on_stays_off(hass: HomeAssistant, fl
     )
     assert flat.occupied("bed")
     assert not [c for c in calls if c[0] == "on" and c[1]["entity_id"] == "light.bed"]
+
+
+async def test_manual_off_survives_sleeper_dropped_by_household_limit(
+    hass: HomeAssistant, flat: Flat, monkeypatch
+) -> None:
+    # Somebody asleep is not seen for hours; when the household limit gives
+    # their place to someone seen elsewhere, the bedroom is "empty" without
+    # anybody having left. Turning over later must not bring the light back.
+    calls = mock_lights(hass)
+    hass.states.async_set("light.bed", "off", {"supported_color_modes": ["brightness"]})
+    await flat.setup(monkeypatch, lights={"bed": "light.bed"})
+    manager = hass.data[DOMAIN]
+    manager.home.set_setting("max_people", 1)
+    await flat.walk([[1000, 3000]] * 4)
+    await flat.idle(20)
+    await hass.services.async_call(
+        "light", "turn_off", {"entity_id": "light.bed"}, blocking=True, context=Context(user_id="user")
+    )
+    await flat.tick(1)
+    await flat.idle(60)
+    await flat.walk([[9500, 1500]] * 8)
+    assert not flat.occupied("bed")
+    await flat.idle(40 * 60)
+    calls.clear()
+    await flat.walk([[1200, 3100]] * 6)
+    assert flat.occupied("bed")
+    assert not [c for c in calls if c[0] == "on" and c[1]["entity_id"] == "light.bed"]
+    assert hass.states.get("binary_sensor.bedroom").attributes["light_mode"] == "manual_off"
