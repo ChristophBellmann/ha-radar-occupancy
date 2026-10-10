@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.14
+
+- Leaving a room is recognised as soon as its own radar sees the person
+  clearly beyond the doorway (at least 20 cm into the next room, crossing
+  measured at the door). Before, that radar kept calling the target its own
+  room until the track ended, about four seconds of darkness next door.
+- Somebody lost at a door no sensor sees behind, walking towards it, gets the
+  room ahead lit at full brightness at once (simulated: hall 0.9–1.3 s after
+  leaving bathroom, kitchen or living room instead of never or five seconds).
+  Counts do not move without evidence, so a person still standing at the door
+  keeps their room; the light fades out after the pre-light time otherwise.
+- Measured on a replica of a two-floor flat (8 random two-person walks of
+  ten minutes, simulated LD2450 at 1 s): light after entering 0.75–1.0 s
+  median instead of 1.25–1.75 s, at worst 3.75 instead of 14 s; entries
+  without light 1 instead of 11–39, fewer switch-ons without anybody entering.
+
 ## 0.3.13
 
 - Simulated radars report like real ones: only people in their field of view
@@ -8,15 +24,6 @@
   (default 1 s, the LD2450 rate in ESPHome), keeping the last coordinates in
   between. Blind corners such as the area in front of a bathroom door stay
   blind. The model follows five days of recorded LD2450 positions.
-- Somebody lost at a door no sensor sees behind, walking towards it, gets the
-  room ahead lit at full brightness at once (simulated: hall 0.9–1.3 s after
-  leaving bathroom, kitchen or living room instead of never or five seconds).
-  Counts do not move without evidence, so a person still standing at the door
-  keeps their room; the light fades out after the pre-light time otherwise.
-- Leaving a room is recognised as soon as its own radar sees the person
-  clearly beyond the doorway (at least 20 cm into the next room, crossing
-  measured at the door). Before, that radar kept calling the target its own
-  room until the track ended, about four seconds of darkness next door.
 - New response action `measure_simulation`: the same walks on a virtual clock,
   returning per room entry how many seconds after entering the light was
   pre-lit and switched on. Simulation snapshots carry the same `latency` list.
