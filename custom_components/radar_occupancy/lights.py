@@ -565,6 +565,38 @@ class LightController:
     # Changes from outside -------------------------------------------------
 
     @callback
+    def off_requested(self, event: Event) -> None:
+        """light.turn_off from anybody else: voice, app, automation.
+
+        The state report alone cannot tell such a command from the echo of
+        our own switch-on in the seconds after it ("light off" right after
+        coming in). The call itself can: whoever asked for off meant it, and a
+        fade still running must not pull the lamp up again."""
+        if not self.active():
+            return
+        ctx = event.context
+        if ctx.id in self.contexts or ctx.parent_id in self.contexts:
+            return
+        ids = event.data.get("service_data", {}).get("entity_id")
+        if not ids:
+            return
+        ids = {ids} if isinstance(ids, str) else set(ids)
+        now = dt_util.utcnow().timestamp()
+        changed = False
+        for light, targets in self.groups().items():
+            if not ("all" in ids or light in ids or ids & set(self.leaves(light))):
+                continue
+            self.cancel_fade(light)
+            st = self.state.setdefault(light, LightState())
+            st.prelit_since = st.on_since = None
+            if st.occupied and st.mode != MANUAL_OFF:
+                st.mode = MANUAL_OFF
+                st.manual_absent_since = None if any(t.observed(now) for t in targets) else now
+                changed = True
+        if changed:
+            self.save()
+
+    @callback
     def light_changed(self, event: Event) -> None:
         entity_id = event.data["entity_id"]
         old, new = event.data.get("old_state"), event.data.get("new_state")

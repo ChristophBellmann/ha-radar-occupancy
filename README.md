@@ -133,7 +133,8 @@ With a light configured:
   that was on before someone entered, because whoever entered owns it.
   A light switched on while nobody entered stays on.
 - **Switched off** in an occupied room (switch, app, voice command or another
-  automation): the light stays off, also after leaving briefly (to the
+  automation, also right after the light came on for entering): the light
+  stays off, also after leaving briefly (to the
   bathroom at night and back) and while someone in bed turns over. Switching
   it on again gives it back to the automation; with a home entry it also ends
   after the room was empty for 30 minutes (configurable), when someone

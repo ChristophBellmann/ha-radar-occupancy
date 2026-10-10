@@ -7,7 +7,7 @@ from datetime import timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.const import EVENT_CALL_SERVICE, STATE_OFF, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, State, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -50,6 +50,13 @@ _LOGGER = logging.getLogger(__name__)
 
 
 _TO_MM = {"mm": 1.0, "cm": 10.0, "m": 1000.0}
+
+
+@callback
+def _light_off_call(event_data) -> bool:
+    return event_data.get("domain") == "light" and event_data.get("service") == "turn_off"
+
+
 MAP_RETRY = 15  # s between attempts to load a map that failed (camera not ready at start)
 
 
@@ -282,6 +289,7 @@ class RadarOccupancyManager:
         self.lights: LightController | None = None
         self._unsub_states = None
         self._unsub_tick = None
+        self._unsub_calls = None
         self._loaded = False
         self._watching: set[str] = set()
         self._ticks = 0
@@ -347,6 +355,10 @@ class RadarOccupancyManager:
     def _start_tick(self) -> None:
         if self._unsub_tick is None:
             self._unsub_tick = async_track_time_interval(self.hass, self._tick, timedelta(seconds=1))
+        if self._unsub_calls is None:
+            self._unsub_calls = self.hass.bus.async_listen(
+                EVENT_CALL_SERVICE, self._service_called, event_filter=_light_off_call
+            )
 
     async def async_remove(self, entry_id: str) -> None:
         if self.simulation:
@@ -369,6 +381,9 @@ class RadarOccupancyManager:
             if self._unsub_tick:
                 self._unsub_tick()
                 self._unsub_tick = None
+            if self._unsub_calls:
+                self._unsub_calls()
+                self._unsub_calls = None
             await self.store.async_save(self.saved)
 
     async def async_forget(self, entry_id: str) -> None:
@@ -399,6 +414,13 @@ class RadarOccupancyManager:
         self._watching = self._watched()
         if self._watching:
             self._unsub_states = async_track_state_change_event(self.hass, sorted(self._watching), self._state_changed)
+
+    @callback
+    def _service_called(self, event: Event) -> None:
+        if self.simulation and self.simulation.live_lights:
+            self.simulation.sandbox.lights.off_requested(event)
+        else:
+            self.lights.off_requested(event)
 
     @callback
     def _state_changed(self, event: Event[EventStateChangedData]) -> None:

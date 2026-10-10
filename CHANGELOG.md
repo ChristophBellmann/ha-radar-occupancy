@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.16
+
+- "Light off" by voice, app or automation right after the light came on for
+  entering now counts as switched off by hand. In the seconds after its own
+  switch-on the integration took the state report for the echo of its command,
+  kept the light automatic and switched it on again at the next entering; a
+  fade still running could also pull the lamp up again. The `light.turn_off`
+  call itself is now the evidence.
+
 ## 0.3.15
 
 - A map that failed to load is tried again every 15 seconds. After a restart

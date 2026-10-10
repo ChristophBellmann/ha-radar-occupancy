@@ -703,3 +703,32 @@ async def test_map_that_failed_at_start_is_loaded_again(hass: HomeAssistant, fla
         await flat.tick(1)
     assert not manager.home.errors
     assert manager.home.floors
+
+
+async def test_voice_off_right_after_switch_on_stays_off(hass: HomeAssistant, flat: Flat, monkeypatch) -> None:
+    # Coming into the bedroom and saying "light off" at once: within the
+    # seconds after our own switch-on a state report looks like its echo.
+    calls = mock_lights(hass)
+    hass.states.async_set("light.bed", "off", {"supported_color_modes": ["brightness"]})
+    await flat.setup(monkeypatch, lights={"bed": "light.bed"})
+    await flat.walk([[1000, 3000]] * 4)
+    assert hass.states.get("light.bed").state == "on"
+    voice = Context(parent_id="01VOICESCRIPT000000000000")
+    await hass.services.async_call("light", "turn_off", {"entity_id": "light.bed"}, blocking=True, context=voice)
+    await flat.tick(1)
+    assert hass.states.get("binary_sensor.bedroom").attributes["light_mode"] == "manual_off"
+    calls.clear()
+    # Out to the bathroom and back: the light stays off.
+    await flat.walk(
+        (line([1000, 3000], [3500, 1000], 5) + line([3500, 1000], [5500, 1000], 5))
+        + line([5500, 1000], [9500, 1500], 8)
+        + [[9500, 1500]] * 3
+    )
+    await flat.idle(60)
+    await flat.walk(
+        line([9500, 1500], [5500, 1000], 8)
+        + (line([5500, 1000], [3500, 1000], 5) + line([3500, 1000], [1000, 3000], 5))
+        + [[1000, 3000]] * 3
+    )
+    assert flat.occupied("bed")
+    assert not [c for c in calls if c[0] == "on" and c[1]["entity_id"] == "light.bed"]
