@@ -1,0 +1,11 @@
+$schema: https://api.gitbook.com/gitbook-docs.yaml
+site:
+  title: Home Assistant Radar Occupancy
+  structure:
+    - type: space
+      key: radar-occupancy
+      title: Home Assistant Radar Occupancy
+      path: docs
+      default: true
+      content:
+        directory: ./docs
