@@ -5,7 +5,7 @@ similar) that **does not switch the light off on people who sit still**.
 
 [Deutsch weiter unten](#deutsch)
 
-The full documentation is in [docs/](docs/README.md) (also as a GitBook):
+The full documentation is in [docs/](docs/README.md) (also as a [GitBook](https://renewable-energy-design.gitbook.io/home-assistant-radar-occupancy/)):
 [Installation](docs/installation.md) ·
 [Radar hardware](docs/hardware.md) ·
 [Rooms](docs/rooms.md) ·
@@ -296,7 +296,7 @@ pytest
 
 ## GitBook source and maintenance
 
-The project documentation is published as a GitBook through GitSync from
+The [project documentation](https://renewable-energy-design.gitbook.io/home-assistant-radar-occupancy/) is published as a GitBook through GitSync from
 `ChristophBellmann/ha-radar-occupancy` on `main`. Page sources live in
 [`docs/`](docs/README.md), with navigation in
 [`docs/SUMMARY.md`](docs/SUMMARY.md). `.gitbook.yaml` and
