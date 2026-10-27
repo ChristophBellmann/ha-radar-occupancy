@@ -20,8 +20,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
 
 class ReleaseButton(RadarOccupancyEntity, ButtonEntity):
     async def async_press(self) -> None:
-        if not self.target.room.release():
+        room = self.target.room
+        if room.presence:
             raise HomeAssistantError(translation_domain=DOMAIN, translation_key="target_present")
+        # Also when the distance logic already sees the room free: on the map
+        # the room can still hold a place.
+        room.release()
         if self.manager.home:
             self.manager.home.release(self.target.entry_id)
         self.manager.notify(self.target)

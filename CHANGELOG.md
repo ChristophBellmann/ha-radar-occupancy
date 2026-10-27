@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.19
+
+- The release button works in map mode when the distance logic already sees
+  the room free. It refused with "target present" while the map still held a
+  place, so a stuck room could only be cleared by the safety timeout.
+
 ## 0.3.18
 
 - Somebody who vanishes at the edge of a sub-area (e.g. a balcony seen by the

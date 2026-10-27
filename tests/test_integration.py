@@ -322,6 +322,9 @@ async def test_area_and_release_and_learn(hass: HomeAssistant, freezer: FrozenDa
     await hass.async_block_till_done()
     assert occupancy(hass, "lab") == "off"
     assert occupancy(hass, "balcony") == "off"
+    # Already free for the distance logic: pressing again is no error (on the
+    # map the room may still hold a place).
+    await hass.services.async_call("button", "press", {"entity_id": "button.lab_release"}, blocking=True)
 
     await hass.services.async_call(
         "button", "press", {"entity_id": "button.lab_learn_door_from_last_exit"}, blocking=True
