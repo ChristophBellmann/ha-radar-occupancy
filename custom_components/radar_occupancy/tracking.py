@@ -433,7 +433,7 @@ class Presence:
                 best = (door, d)
         return best[0] if best else None
 
-    def _reacquire(self, track):
+    def _reacquire(self, track, confirmed=False):
         # An unpaired departure is still held. Reappearing on the same side
         # cancels it instead of becoming another arrival.
         departure = next(
@@ -472,11 +472,34 @@ class Presence:
                 return False
             track.counted = True
             return True
+        # A sub-area shares the radar of its room: whoever vanished at the
+        # edge between them and reappears right there on the other side is the
+        # same person, not a second one. Keeping both held hid the departure.
+        # Only once confirmed: a single echo must not move the occupancy.
+        if not confirmed:
+            return False
+        lost = next(
+            (
+                item
+                for item in self.lost
+                if item["room"] != track.room
+                and item["floor"] == track.floor
+                and self.count(item["room"]) > 0
+                and any(d.point is None for d in self.door_between(item["room"], track.room))
+                and math.dist(item["point"], track.birth_point) <= MERGE
+            ),
+            None,
+        )
+        if lost:
+            self.lost.remove(lost)
+            track.counted = True
+            self.transfer(lost["room"], track.room, track.born)
+            return True
         return False
 
     def _born(self, track, now):
         track.counted = True
-        if self._reacquire(track):
+        if self._reacquire(track, True):
             return
         door = self._door_near(track, now, False)
         if door is None:

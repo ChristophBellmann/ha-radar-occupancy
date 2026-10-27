@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.18
+
+- Somebody who vanishes at the edge of a sub-area (e.g. a balcony seen by the
+  room's ceiling radar) and reappears right there on the other side is the
+  same person. The room kept its held place while the sub-area counted a new
+  person; walking back through the room and out then left the room occupied
+  with its light on until the safety timeout. A confirmed reappearance within
+  0.8 m now moves the held place over. Somebody appearing elsewhere in the
+  sub-area still counts in addition.
+
 ## 0.3.17
 
 - Walking towards a door while the radar of the room ahead already sees you

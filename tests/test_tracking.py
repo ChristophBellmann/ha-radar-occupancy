@@ -295,3 +295,50 @@ class PresenceTests(unittest.TestCase):
         self.run_path([[3500, 1000]] * 4 + [[4100, 1000], [3900, 1000]] * 8)
         self.assertEqual(self.p.count("Schlafzimmer"), 1)
         self.assertEqual(self.p.count("Gang"), 0)
+
+
+# Labor mit Deckenradar, das auch den tiefer liegenden Balkon sieht (Nebenzone
+# ohne eigene Kontur), Büro nebenan. Rundgang vom 27.10.2026.
+LABOR = {
+    "Labor": {"floor": "unten", "polygon": [[0, 0], [4000, 0], [4000, 5000], [0, 5000]]},
+    "Balkon": {"floor": "unten", "polygon": None},
+    "Büro": {"floor": "unten", "polygon": [[4000, 0], [8000, 0], [8000, 4000], [4000, 4000]]},
+}
+
+
+class SubAreaTests(unittest.TestCase):
+    def setUp(self):
+        self.p = Presence(
+            LABOR,
+            [Door("Labor", "Büro", "unten", [4000, 1000]), Door("Labor", "Balkon", "unten", None, True)],
+        )
+        self.p.max_people = 2
+        self.t = 0.0
+
+    def walk(self, points, room=None):
+        for point in points:
+            self.t += 0.5
+            self.p.step(self.t, [("unten", point, room)] if point else [])
+
+    def idle(self, seconds):
+        self.walk([None] * int(seconds / 0.5))
+
+    def test_reappearing_in_sub_area_is_the_same_person(self):
+        self.walk([[3500, 1000], [3000, 1500], [2500, 2000], [2000, 2500], [1500, 3000], [800, 3100], [100, 3150]])
+        # Der Balkon liegt hinter der Laborkontur; dort verschwindet das Ziel.
+        self.walk([[-800, 3200]], "Balkon")
+        self.idle(240)
+        self.assertEqual(self.p.counts.get("Labor"), 1)
+        self.walk([[-750, 3000], [-700, 2900], [-650, 2800], [-600, 2700]], "Balkon")
+        self.assertEqual((self.p.count("Balkon"), self.p.count("Labor")), (1, 0))
+        self.walk([[300, 2400], [1200, 1900], [2200, 1400], [3200, 1100], [3900, 1000]])
+        self.assertEqual((self.p.count("Balkon"), self.p.count("Labor")), (0, 1))
+        self.walk([[4200, 1000], [4600, 1000], [5000, 1000], [5400, 1000]])
+        self.idle(5)
+        self.assertEqual({r: self.p.count(r) for r in LABOR}, {"Labor": 0, "Balkon": 0, "Büro": 1})
+
+    def test_somebody_else_on_the_balcony_keeps_the_room(self):
+        self.walk([[3500, 1000], [3000, 1500], [2500, 2000], [2000, 2500]])
+        self.idle(60)  # sitting still in the middle of the lab
+        self.walk([[-900, 4600], [-850, 4500], [-800, 4400], [-750, 4300]], "Balkon")
+        self.assertEqual((self.p.count("Balkon"), self.p.count("Labor")), (1, 1))
