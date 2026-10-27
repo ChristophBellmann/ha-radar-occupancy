@@ -438,6 +438,8 @@ async def test_fade_in_steps_and_fade_out_never_switches_on(hass: HomeAssistant,
     await hass.async_block_till_done(wait_background_tasks=True)
     steps = [c[1]["brightness"] for c in calls if c[0] == "on" and c[1]["entity_id"] == "light.bed_1"]
     assert len(steps) >= 3 and steps == sorted(steps) and steps[-1] == 102
+    # Coming in, the first command already gives usable light (pre-light level).
+    assert steps[0] >= round(102 * 0.3)
     # One lamp switched off by hand at the switch; fading out leaves it alone.
     hass.states.async_set("light.bed_2", "off", {"supported_color_modes": ["brightness"]})
     calls.clear()
@@ -760,3 +762,20 @@ async def test_manual_off_survives_sleeper_dropped_by_household_limit(
     assert flat.occupied("bed")
     assert not [c for c in calls if c[0] == "on" and c[1]["entity_id"] == "light.bed"]
     assert hass.states.get("binary_sensor.bedroom").attributes["light_mode"] == "manual_off"
+
+
+def test_foreign_radar_ghost_in_a_room_its_own_radar_watches_is_dropped():
+    from custom_components.radar_occupancy.home import without_foreign_ghosts
+
+    rooms = {
+        "bath": {"floor": "f", "polygon": [[0, 0], [3000, 0], [3000, 3000], [0, 3000]]},
+        "kitchen": {"floor": "f", "polygon": [[3000, 0], [7000, 0], [7000, 3000], [3000, 3000]]},
+    }
+    coverage = [("f", "bath", None, "ceiling", [1500, 1500]), ("f", "kitchen", None, "ceiling", [5000, 1500])]
+    ghost = ("f", [1400, 1600], None, "kitchen")
+    assert without_foreign_ghosts([ghost], rooms, coverage, {"bath", "kitchen"}) == []
+    # The bathroom radar sees somebody there: the kitchen radar's view counts.
+    seen = ("f", [1300, 1500], "bath", "bath")
+    assert ghost in without_foreign_ghosts([ghost, seen], rooms, coverage, {"bath", "kitchen"})
+    # Bathroom radar offline: nobody watches, the sighting stays.
+    assert without_foreign_ghosts([ghost], rooms, coverage, {"kitchen"}) == [ghost]

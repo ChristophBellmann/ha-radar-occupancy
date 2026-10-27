@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.4.0
+
+Checked by replaying a whole recorded day (14 h, seven LD2450, two floors)
+through the integration; one person was at home, as the own-room sightings
+show. Compared with 0.3.19:
+
+| | 0.3.19 | 0.4.0 |
+| --- | --- | --- |
+| light on without anybody coming (incl. pre-light) | 148 | 26 |
+| minutes lit while the person was evidently elsewhere | 367 | 238 |
+| light decision vs. entering (median, negative = before) | −1.2 s | −1.5 s |
+| bathroom, median | +0.1 s | −0.9 s |
+| entries without light / light off while still there | 0 / 0 | 0 / 0 |
+
+- One person seen by several radars is one observation. Each radar kept its
+  own room for targets up to 0.8 m outside it, so somebody in the hall came
+  in as hall, living room and bathroom person and the household limit then
+  "emptied" the room actually occupied.
+- Targets a radar reports inside another room are dropped when that room's
+  own radar watches the spot and sees nobody (a kitchen radar held the
+  bathroom for an hour with a reflection).
+- Sub-area targets are dropped while somebody is seen next door near the
+  shared door: the lab's ceiling radar showed a person in the office mirrored
+  in the balcony zone and kept lab and balcony occupied.
+- Following a person through doors: departures pair with an arrival seen up
+  to 8 s earlier, with an arrival through another door of the same hall, and
+  a radar losing somebody just outside its outline next to a door counts as
+  that door. First reports up to 1.5 m behind a door count as arriving there.
+- Faster light: a new target at the door of an empty room and the first
+  measurement of a door passage light the room at once; counting still waits
+  for the confirmation. Coming in, fades start at the pre-light level.
+- Pre-light only when walking at the door, once per walk, and not again from
+  the spot where the last approach ended without passing (desk chair next to
+  a door pre-lit the lab every 25 s).
+
 ## 0.3.19
 
 - The release button works in map mode when the distance logic already sees

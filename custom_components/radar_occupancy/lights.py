@@ -455,6 +455,11 @@ class LightController:
             state = self.hass.states.get(leaf)
             on = state is not None and state.state == STATE_ON
             start[leaf] = max(1, int(state.attributes.get("brightness") or 255)) if on else 1
+            if direction == "enter" and not on:
+                # Coming in: visible at once, at the pre-light level, then up.
+                # From the darkest step the first command of a cloud lamp
+                # gave no usable light for a second or two.
+                start[leaf] = max(1, round(goal[leaf] * self.approach_factor()))
         duration = max(self.fade_time(direction), const.FADE_STEP)
         sent: dict[str, int] = {}
         inflight: dict[str, asyncio.Task] = {}

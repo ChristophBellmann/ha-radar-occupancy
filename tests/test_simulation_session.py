@@ -259,7 +259,9 @@ async def test_measure_reports_light_delay_after_entering(hass, flat, monkeypatc
     hall = next(e for e in ideal["latency"] if e["room"] == "Hall")
     assert hall["lit"] is not None and hall["lit"] <= 2
     slow_hall = next(e for e in slow["latency"] if e["room"] == "Hall")
-    assert slow_hall["lit"] is not None and slow_hall["lit"] >= hall["lit"]
+    # Reports once a second: the first one right behind the door lights the
+    # hall, no later than one report interval after the ideal sensor.
+    assert slow_hall["lit"] is not None and slow_hall["lit"] <= hall["lit"] + 1
     assert slow["sensor_interval"] == 1 and not slow["running"]
     assert manager.simulation is None
     assert manager.saved == before

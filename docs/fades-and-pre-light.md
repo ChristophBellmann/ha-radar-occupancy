@@ -19,12 +19,14 @@ the light does not jump at the dark end.
 - Switching off by hand cancels a running fade at once.
 
 A fade-in is part of the felt delay: with 3 s fade the room is fully lit 3 s
-after the decision. A short fade (about 1 s) feels much faster.
+after the decision. A short fade (about 1 s) feels much faster. Coming in, a
+lamp that was off starts at the pre-light level instead of the darkest step:
+the first command, often a slow cloud call, already gives usable light.
 
 ## Pre-light
 
 In map mode somebody walking towards a door (within 1.5 m, at least 30 cm
-closer) pre-lights the room behind it with *Pre-light when approaching the
+closer, heading at the door, once per walk) pre-lights the room behind it with *Pre-light when approaching the
 door* (option of the home, default 30 % of the target brightness).
 
 | Situation | Light |

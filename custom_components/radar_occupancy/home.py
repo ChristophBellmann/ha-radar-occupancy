@@ -91,6 +91,45 @@ def covers(transform, mount, location, point, reach=5000, half_angle=55) -> bool
     return 300 <= math.hypot(rx, ry) <= reach and ry > 0 and abs(math.degrees(math.atan2(rx, ry))) <= half_angle
 
 
+def without_foreign_ghosts(observations, rooms, coverage, online, margin=1200):
+    """Drop targets a radar reports inside another room whose own radar has
+    that spot in view and sees nobody there.
+
+    Radars see through walls and produce reflections; the kitchen radar
+    placed a target in the bathroom for seconds, which then held the
+    bathroom for an hour. Where the room's own radar cannot look (corners in
+    front of the hall doors), sightings through doors still count."""
+    own = {}
+    for obs in observations:
+        own.setdefault(obs[3], []).append(obs[1])
+    views = {room: (transform, mount, location) for _, room, transform, mount, location in coverage}
+    kept = []
+    for obs in observations:
+        floor, point, assigned, sensor = obs[:4]
+        if assigned is not None and assigned in rooms and not rooms[assigned].get("polygon"):
+            kept.append(obs)  # sub-area of the sensor's own room
+            continue
+        room = next(
+            (
+                rid
+                for rid, info in rooms.items()
+                if info.get("polygon") and info["floor"] == floor and inside(point, info["polygon"])
+            ),
+            None,
+        )
+        if (
+            room is not None
+            and room != sensor
+            and room in online
+            and room in views
+            and covers(*views[room][:2], views[room][2], point)
+            and not any(math.dist(point, p) <= margin for p in own.get(room, []))
+        ):
+            continue
+        kept.append(obs)
+    return kept
+
+
 def centroid(polygon):
     return [sum(p[0] for p in polygon) / len(polygon), sum(p[1] for p in polygon) / len(polygon)]
 
@@ -326,6 +365,7 @@ class Home:
         presence_rooms: dict[str, dict[str, Any]] = {}
         coverage = []
         observations = []
+        online: set[str] = set()
         all_targets = []
         labels = {}
         for room_id, room in manager.rooms.items():
@@ -387,6 +427,8 @@ class Home:
                     labels[aid] = area.entry.title
             presence = self.hass.states.get(options[CONF_PRESENCE])
             available = bool(presence and presence.state in ("on", "off"))
+            if available and map_ready:
+                online.add(room_id)
             zone = "uncalibrated"
             if transform and polygon:
                 if any(t.get("inside") for t in targets):
@@ -443,7 +485,7 @@ class Home:
         hold_off = {rid for rid, r in manager.rooms.items() if not r.room.hold}
         hold_off |= {aid for aid, info in presence_rooms.items() if info.get("parent") in hold_off}
         self.tracking.max_people = int(self.max_people) if self.max_people else None
-        self.tracking.step(now, observations, hold_off)
+        self.tracking.step(now, without_foreign_ghosts(observations, presence_rooms, coverage, online), hold_off)
         self.ready = set(presence_rooms)
         people = {rid: n for rid, n in self.tracking.counts.items() if rid in manager.rooms or rid in manager.areas}
         if people != self.data["people"]:

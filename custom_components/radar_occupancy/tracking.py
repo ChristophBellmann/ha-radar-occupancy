@@ -29,9 +29,15 @@ EDGE = 400  # mm: tolerance at room outlines
 DOOR_CROSS = 450  # mm: measured boundary crossing must pass the actual doorway
 DOOR_PASS = 1300  # mm: a track changes rooms only this close to a door
 DOOR_NEAR = 1100  # mm: appearing "at the door"
+ARRIVE_NEAR = 1500  # mm: first report of somebody coming in (radars see doorways late)
 DOOR_LEAVE = 800  # mm: vanishing "at the door" (stricter: it switches lights off)
 DOOR_APPROACH = 300  # mm: a target must have come this much closer to the door
 APPROACH_ZONE = 1500  # mm: pre-light when a target walks this close towards a door
+APPROACH_REARM = 1000  # mm: beyond the zone by this much, the door may pre-light again
+APPROACH_HEADING = 35  # degrees: walking at the door, not along the wall past it
+SUB_SHADOW = 3000  # mm: somebody this close to a door of the parent room, seen next door, explains sub-area targets
+SPOT_RADIUS = 1000  # mm: approaches starting here again (a desk chair) are no walk to the door
+SPOT_MEMORY = 900.0  # s: how long such a starting point is remembered without a passage
 PAIR_WINDOW = 8.0  # s: vanishing at a door and appearing on the other side
 REACQUIRE_WINDOW = 15.0  # s: a nearby reappearance after radar dropout is not a new entrant
 UNSEEN_PASS = 2.0  # s: door into an area no sensor sees
@@ -51,6 +57,13 @@ RELEASED = "released"  # released by hand
 HOLD_OFF = "hold_off"  # no target and hold switched off
 HOUSEHOLD = "household_limit"  # more people counted than live in the home: a held place was stale
 REASONS = (SEEN, MOVED, CAME_IN, APPEARED_AT_DOOR, WENT_OUT, RELEASED, HOLD_OFF, HOUSEHOLD)
+
+
+def _segment_distance(point, a, b):
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    length = dx * dx + dy * dy
+    t = max(0, min(1, ((point[0] - a[0]) * dx + (point[1] - a[1]) * dy) / length)) if length else 0
+    return math.dist(point, [a[0] + t * dx, a[1] + t * dy])
 
 
 class Door:
@@ -87,6 +100,7 @@ class Track:
         self.birth_point = point
         self.room_since = now
         self.sensors = frozenset()  # rooms whose radar reported the last position
+        self.approached = {}  # door -> "active" while walking towards it, "used" after; walking away re-arms
 
     def age(self, now):
         return now - self.born
@@ -104,6 +118,8 @@ class Presence:
         self.events = []
         self.reasons = {}  # room -> {"code": ..., "from": room key, "to": room key}
         self.approaching = {}  # room -> time of the last approach to its door
+        self.false_starts = {}  # door -> [(point, time)] approaches not (yet) followed by a passage
+        self.arrived_unpaired = []  # people who appeared at a door before anybody vanished on the other side
         self.expected = {}  # room -> time someone vanished at its unseen door, walking towards it
         self.arrivals = {}  # room -> time someone last came in through a door
         self.arrived_from = {}  # room -> where that person came from (OUTSIDE: into the home)
@@ -165,6 +181,8 @@ class Presence:
         del self.events[:-40]
 
     def transfer(self, source, target, now):
+        for door in self.door_between(source, target):
+            self.false_starts.pop(id(door), None)
         self._change(source, -1, MOVED, now, source, target)
         self._change(target, +1, MOVED, now, source, target)
         self._arrive(target, now, source)
@@ -246,6 +264,7 @@ class Presence:
             elif not track.counted and track.room and track.age(now) >= CONFIRM_ONE and track.seen == now:
                 self._born(track, now)
         self._settle_deaths(now)
+        self._arriving(now)
         seen_now = {}
         for room in self.rooms:
             seen = seen_now[room] = self.visible(room, now)
@@ -304,21 +323,104 @@ class Presence:
                 self.deaths = [d for d in self.deaths if d["room"] != room]
 
     def _merge(self, observations):
-        merged = []
+        """One person seen by several radars is one observation.
+
+        Each radar keeps its own room for targets near its outline, so the
+        same person in the hall used to arrive as a hall, a living room and a
+        bathroom observation, each counted on its own. Targets of all sensors
+        within MERGE are fused. The room of the fused target comes from the
+        sensor that sees it deepest inside its own room; without such a
+        sensor, from a room all members agree on, otherwise the map decides.
+        Sub-areas (no outline) are only fused with their own targets."""
+        groups = []
+        observations = self._without_shadows(observations)
         for obs in observations:
             floor, point = obs[0], list(obs[1])
             forced = obs[2] if len(obs) > 2 else None
             sensor = obs[3] if len(obs) > 3 else None
-            for group in merged:
-                if group["floor"] == floor and group["room"] == forced and math.dist(group["point"], point) < MERGE:
-                    n = group["n"]
-                    group["point"] = [(group["point"][k] * n + point[k]) / (n + 1) for k in range(2)]
-                    group["n"] += 1
-                    group["sensors"] |= {sensor} - {None}
-                    break
+            sub = forced is not None and forced in self.rooms and not self.rooms[forced].get("polygon")
+            for group in groups:
+                if group["floor"] != floor or math.dist(group["point"], point) >= MERGE:
+                    continue
+                if (sub or group["sub"]) and group["forced"] != {forced}:
+                    continue
+                n = group["n"]
+                group["point"] = [(group["point"][k] * n + point[k]) / (n + 1) for k in range(2)]
+                group["n"] += 1
+                break
             else:
-                merged.append({"floor": floor, "point": point, "room": forced, "n": 1, "sensors": {sensor} - {None}})
-        return [(g["floor"], g["point"], g["room"], frozenset(g["sensors"])) for g in merged]
+                group = {
+                    "floor": floor,
+                    "point": point,
+                    "n": 1,
+                    "sub": sub,
+                    "forced": set(),
+                    "sensors": set(),
+                    "own": [],
+                }
+                groups.append(group)
+            group["forced"].add(forced)
+            if sensor is not None:
+                group["sensors"].add(sensor)
+            depth = self._depth(sensor, forced, point)
+            if depth is not None:
+                group["own"].append((depth, forced))
+        merged = []
+        for g in groups:
+            if g["own"]:
+                room = max(g["own"], key=lambda o: o[0])[1]
+            elif len(g["forced"]) == 1:
+                room = next(iter(g["forced"]))
+            else:
+                room = None
+            merged.append((g["floor"], g["point"], room, frozenset(g["sensors"])))
+        return merged
+
+    def _without_shadows(self, observations):
+        """Drop sub-area targets while the person is next door.
+
+        A ceiling radar cannot tell front from back: somebody in the next
+        room near its door shows up mirrored, in the balcony zone of the lab.
+        While the radar of that neighbour sees somebody inside its own room
+        near the shared door, a sub-area target is that person."""
+        near = []
+        for obs in observations:
+            sensor = obs[3] if len(obs) > 3 else None
+            if self._depth(sensor, obs[2] if len(obs) > 2 else None, obs[1]) is not None:
+                near.append((obs[0], sensor, obs[1]))
+        if not near:
+            return observations
+        kept = []
+        for obs in observations:
+            forced = obs[2] if len(obs) > 2 else None
+            parent = self._parent(forced)
+            if parent is not None and any(
+                floor == obs[0]
+                and other != parent
+                and any(
+                    d.point is not None and math.dist(point, d.point) <= SUB_SHADOW
+                    for d in self.door_between(parent, other)
+                )
+                for floor, other, point in near
+            ):
+                continue
+            kept.append(obs)
+        return kept
+
+    def _parent(self, room):
+        """The room a sub-area belongs to (linked by a door without position)."""
+        if room is None or room not in self.rooms or self.rooms[room].get("polygon"):
+            return None
+        return next((d.other(room) for d in self.doors_of(room) if d.point is None), None)
+
+    def _depth(self, sensor, forced, point):
+        """How far a sensor's target lies inside the sensor's own room (mm), or None."""
+        if sensor is None or forced != sensor:
+            return None
+        polygon = self.rooms.get(sensor, {}).get("polygon")
+        if not polygon or not inside(point, polygon):
+            return None
+        return min(_segment_distance(point, a, b) for a, b in zip(polygon, polygon[1:] + polygon[:1]))
 
     def _can_match(self, track, obs, now):
         """A trusted sighting in another room must not refresh a stuck track.
@@ -406,6 +508,9 @@ class Presence:
             return
         if track.pending != room:
             track.pending, track.pending_since = room, now
+            # Through the door: light the room now, the count follows once the
+            # passage is confirmed.
+            self.expected[room] = now
             return
         if now - track.pending_since >= 0.5:
             source = track.room
@@ -418,11 +523,11 @@ class Presence:
                 self._arrive(room, now, source)
             self.deaths = [d for d in self.deaths if not (d["room"] == source and d["to"] == room)]
 
-    def _door_near(self, track, now, require_approach):
+    def _door_near(self, track, now, require_approach, limit=None, point=None):
         best = None
-        limit = DOOR_LEAVE if require_approach else DOOR_NEAR
+        limit = limit or (DOOR_LEAVE if require_approach else DOOR_NEAR)
         for door in self.doors_of(track.room):
-            d = door.distance(track.floor, track.point)
+            d = door.distance(track.floor, point or track.point)
             if d is None or d > limit:
                 continue
             if require_approach:
@@ -501,7 +606,7 @@ class Presence:
         track.counted = True
         if self._reacquire(track, True):
             return
-        door = self._door_near(track, now, False)
+        door = self._door_near(track, now, False) or self._door_near(track, now, False, ARRIVE_NEAR, track.birth_point)
         if door is None:
             # Appeared in the middle of the room: someone who was there, sitting still.
             return
@@ -512,9 +617,27 @@ class Presence:
             (d for d in self.deaths if d["door"] is door and d["room"] == other and now - d["time"] <= PAIR_WINDOW),
             None,
         )
+        via = next(
+            (
+                d
+                for d in self.deaths
+                if d["to"] == other
+                and d["room"] != track.room
+                and d["door"] is not door
+                and now - d["time"] <= PAIR_WINDOW
+                and not self.visible(other, now)
+            ),
+            None,
+        )
         if paired:
             self.deaths.remove(paired)
             self.transfer(other, track.room, now)
+        elif via:
+            # Out of one room into the hall and straight into the next one,
+            # in a corner the hall radar does not see: the path is the
+            # evidence, both doors open into the same hall.
+            self.deaths.remove(via)
+            self.transfer(via["room"], track.room, now)
         elif self.count(other) > self.visible(other, now) and not door.covered_into(other):
             # A sensor cannot see departure from the other side (e.g. the
             # long corridor). Arrival here completes that unseen passage;
@@ -524,6 +647,9 @@ class Presence:
             # Appearance alone is not proof of another person. Radar targets
             # have no stable identity; repeated dropouts used to inflate counts.
             # Simultaneous, separated targets establish the lower bound in step().
+            if other != OUTSIDE:
+                self.arrived_unpaired.append({"time": now, "room": track.room, "from": other})
+                del self.arrived_unpaired[:-10]
             self.reasons[track.room] = {
                 "code": CAME_IN if other == OUTSIDE else APPEARED_AT_DOOR,
                 "from": other,
@@ -542,13 +668,31 @@ class Presence:
     def _died(self, track, now):
         if not track.counted or track.room is None:
             return
-        door = self._door_near(track, now, True)
+        door = self._door_near(track, now, True) or self._door_beyond(track)
         if door is None:
             self.lost.append({"room": track.room, "floor": track.floor, "point": track.point, "time": track.seen})
             self.vanished[track.room] = track.seen
             return
         other = door.other(track.room)
         crossed = self._crossed_door(track, door, track.seen)
+        early = next(
+            (
+                a
+                for a in self.arrived_unpaired
+                if 0 <= now - a["time"] <= PAIR_WINDOW
+                and a["room"] != track.room
+                and track.room in self.rooms
+                and (a["room"] == other or a["from"] == other)
+            ),
+            None,
+        )
+        if early and other != OUTSIDE:
+            # The radar ahead saw them come in before this one let go of them
+            # (it holds the last coordinates for a few seconds). They are
+            # already counted there; this room is left.
+            self.arrived_unpaired.remove(early)
+            self._change(track.room, -1, MOVED, now, track.room, early["room"])
+            return
         if other == OUTSIDE and crossed:
             self._change(track.room, -1, WENT_OUT, now, track.room, OUTSIDE)
         elif other != OUTSIDE:
@@ -556,6 +700,34 @@ class Presence:
         else:
             self.lost.append({"room": track.room, "floor": track.floor, "point": track.point, "time": track.seen})
             self.vanished[track.room] = track.seen
+
+    def _door_beyond(self, track):
+        """Lost outside its room, inside a neighbour it has a door to (within
+        1.3 m of that door):
+        the radar of the room left followed the person through the door
+        (crossing the outline a little beside the marked door point)."""
+        polygon = self.rooms.get(track.room, {}).get("polygon")
+        if not polygon or inside(track.point, polygon):
+            return None
+        beyond = next(
+            (
+                r
+                for r, info in self.rooms.items()
+                if r != track.room
+                and info["floor"] == track.floor
+                and info.get("polygon")
+                and inside(track.point, info["polygon"])
+            ),
+            None,
+        )
+        if beyond is None:
+            return None
+        doors = [
+            d
+            for d in self.door_between(track.room, beyond)
+            if (gap := d.distance(track.floor, track.point)) is not None and gap <= DOOR_PASS
+        ]
+        return min(doors, key=lambda d: d.distance(track.floor, track.point)) if doors else None
 
     def _settle_deaths(self, now):
         for death in list(self.deaths):
@@ -573,27 +745,74 @@ class Presence:
                 )
                 self.vanished[death["room"]] = death["time"]
 
+    def _arriving(self, now):
+        """A new target right behind the door of an empty room is somebody
+        coming in. Confirming it costs a second report (about a second);
+        light the room at once. The count still waits for the confirmation;
+        a stray echo only pre-lights the room."""
+        for track in self.tracks:
+            if (
+                track.seen == now
+                and not track.counted
+                and track.room in self.rooms
+                and self.rooms[track.room].get("polygon")
+                and not self.count(track.room)
+                and self._door_near(track, now, False) is not None
+            ):
+                self.expected[track.room] = now
+
+    def _heading_at(self, track, door, now):
+        """The last two seconds of the track point at the door."""
+        recent = [p for t, p in track.history if now - t <= 2 and t >= track.room_since]
+        if len(recent) < 2 or door.point is None:
+            return False
+        mx, my = recent[-1][0] - recent[0][0], recent[-1][1] - recent[0][1]
+        dx, dy = door.point[0] - recent[0][0], door.point[1] - recent[0][1]
+        if not (mx or my) or not (dx or dy):
+            return False
+        angle = abs(math.degrees(math.atan2(mx * dy - my * dx, mx * dx + my * dy)))
+        return angle <= APPROACH_HEADING
+
     def _approach(self, now):
         for track in self.tracks:
             if track.seen != now or track.room is None:
                 continue
             for door in self.doors_of(track.room):
                 d = door.distance(track.floor, track.point)
+                if d is not None and d > APPROACH_ZONE + APPROACH_REARM:
+                    track.approached.pop(id(door), None)
                 if d is None or d > APPROACH_ZONE:
+                    if track.approached.get(id(door)) == "active":
+                        track.approached[id(door)] = "used"
                     continue
                 # Only since entering this room: whoever just came through the
                 # door is walking away from it, not towards it.
                 earlier = [
                     door.distance(track.floor, p) for t, p in track.history if now - t <= 2 and t >= track.room_since
                 ]
-                if earlier and max(earlier) - d >= DOOR_APPROACH:
-                    other = door.other(track.room)
-                    if other in self.rooms:
+                towards = bool(earlier) and max(earlier) - d >= DOOR_APPROACH and self._heading_at(track, door, now)
+                if not towards:
+                    if track.approached.get(id(door)) == "active":
+                        track.approached[id(door)] = "used"
+                    continue
+                other = door.other(track.room)
+                if other in self.rooms:
+                    # One approach per walk towards the door, and none again
+                    # from where the last one ended without passing: shifting
+                    # on a chair near it pre-lit the next room every 25 s.
+                    state = track.approached.get(id(door))
+                    if state is None:
+                        start = next(p for t, p in track.history if now - t <= 2 and t >= track.room_since)
+                        spots = [x for x in self.false_starts.get(id(door), []) if now - x[1] <= SPOT_MEMORY]
+                        repeat = any(math.dist(point, start) <= SPOT_RADIUS for point, _ in spots)
+                        self.false_starts[id(door)] = [*spots, (start, now)][-10:]
+                        state = track.approached[id(door)] = "used" if repeat else "active"
+                    if state == "active":
                         self.approaching[other] = now
-                        if other in track.sensors and d <= DOOR_NEAR:
-                            # The radar of the room ahead already sees them
-                            # coming through its door: light it fully.
-                            self.expected[other] = now
+                    if other in track.sensors and d <= DOOR_NEAR:
+                        # The radar of the room ahead already sees them
+                        # coming through its door: light it fully.
+                        self.expected[other] = now
 
     def snapshot(self, now):
         return {

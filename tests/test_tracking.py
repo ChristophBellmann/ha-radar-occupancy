@@ -342,3 +342,96 @@ class SubAreaTests(unittest.TestCase):
         self.idle(60)  # sitting still in the middle of the lab
         self.walk([[-900, 4600], [-850, 4500], [-800, 4400], [-750, 4300]], "Balkon")
         self.assertEqual((self.p.count("Balkon"), self.p.count("Labor")), (1, 1))
+
+
+class HouseholdTests(PresenceTests):
+    """Haushalt von bis zu zwei Personen."""
+
+    def setUp(self):
+        super().setUp()
+        self.p.max_people = 2
+
+    def test_standing_echo_elsewhere_keeps_the_room(self):
+        self.run_path([[1000, 3000]] * 4)
+        self.idle(120)
+        self.run_path([[10000, 2000]] * 20)
+        self.assertEqual(self.p.count("Schlafzimmer"), 1)
+
+    def test_one_person_seen_by_two_radars_is_one(self):
+        # Gangradar sieht die Person im Gang, das Schlafzimmerradar durch die
+        # Tür knapp außerhalb seines Raums (eigener Raum bis 800 mm erzwungen).
+        for i in range(10):
+            self.t += 0.5
+            self.p.step(
+                self.t, [("oben", [4600, 1100], "Gang", "Gang"), ("oben", [4500, 900], "Schlafzimmer", "Schlafzimmer")]
+            )
+        self.assertEqual(self.p.count("Gang"), 1)
+        self.assertEqual(self.p.count("Schlafzimmer"), 0)
+
+    def test_new_target_at_door_of_empty_room_lights_at_once(self):
+        self.t += 0.5
+        self.p.step(self.t, [("oben", [8400, 1000], "Bad", "Bad")])
+        self.assertEqual(self.p.expected.get("Bad"), self.t)
+        self.assertEqual(self.p.count("Bad"), 0, "Gezählt wird erst nach der Bestätigung.")
+
+    def test_shifting_on_a_chair_near_the_door_pre_lights_once(self):
+        lit = 0
+        for _ in range(5):
+            for point in [[6800, 1000], [7300, 1000], [7500, 1000], [7500, 1000], [6800, 1000], [6800, 1000]]:
+                self.t += 0.5
+                before = self.p.approaching.get("Bad")
+                self.p.step(self.t, [("oben", point, None, "Gang")])
+                if (
+                    self.p.approaching.get("Bad") != before
+                    and before is None
+                    or (before is not None and self.p.approaching.get("Bad") - before > 2)
+                ):
+                    lit += 1
+        self.assertEqual(lit, 1)
+
+
+class SubAreaShadowTests(SubAreaTests):
+    def test_lab_radar_mirroring_somebody_in_the_office_is_no_balcony(self):
+        for _ in range(10):
+            self.t += 0.5
+            self.p.step(self.t, [("unten", [5000, 1500], "Büro", "Büro"), ("unten", [-800, 3200], "Balkon", "Labor")])
+        self.assertEqual(self.p.count("Balkon"), 0)
+        self.assertEqual(self.p.count("Büro"), 1)
+
+    def test_balcony_while_office_is_empty_counts(self):
+        for _ in range(10):
+            self.t += 0.5
+            self.p.step(self.t, [("unten", [-800, 3200], "Balkon", "Labor")])
+        self.assertEqual(self.p.count("Balkon"), 1)
+
+
+class PathTests(PresenceTests):
+    def test_seen_arriving_next_door_before_the_radar_lets_go(self):
+        # Das Schlafzimmerradar folgt der Person in den Gang (Grenze neben dem
+        # Türpunkt überquert) und hält ihre letzte Position noch, während das
+        # Badradar sie schon an seiner Tür sieht.
+        own = [
+            ("oben", p, "Schlafzimmer", "Schlafzimmer")
+            for p in [[1500, 1800]] * 3 + self.walk([1500, 1800], [4300, 1800], 6)
+        ]
+        for obs in own:
+            self.t += 0.5
+            self.p.step(self.t, [obs])
+        self.assertEqual(self.p.count("Schlafzimmer"), 1)
+        for point in self.walk([8300, 1000], [9500, 1500], 6):
+            self.t += 0.5
+            self.p.step(self.t, [("oben", point, "Bad", "Bad"), ("oben", [4300, 1800], "Schlafzimmer", "Schlafzimmer")])
+        self.idle(5)
+        self.assertEqual(self.p.count("Bad"), 1)
+        self.assertEqual(self.p.count("Schlafzimmer"), 0)
+
+    def test_lost_beyond_the_outline_without_anybody_next_door_holds(self):
+        own = [
+            ("oben", p, "Schlafzimmer", "Schlafzimmer")
+            for p in [[1500, 1800]] * 3 + self.walk([1500, 1800], [4300, 1800], 6)
+        ]
+        for obs in own:
+            self.t += 0.5
+            self.p.step(self.t, [obs])
+        self.idle(30)
+        self.assertEqual(self.p.count("Schlafzimmer"), 1)
