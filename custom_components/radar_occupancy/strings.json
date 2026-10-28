@@ -494,6 +494,32 @@
           "description": "Remove all doors marked for the room."
         }
       }
+    },
+    "set_ignore_zone": {
+      "name": "Set ignore zone",
+      "description": "A spot this room's radar reports as a target although nobody is there, e.g. a 3D printer or fan. Targets there never count as people.",
+      "fields": {
+        "room": {
+          "name": "Room",
+          "description": "Room: entry id or any entity of the room."
+        },
+        "x": {
+          "name": "X",
+          "description": "Radar X in mm, as the sensor reports it."
+        },
+        "y": {
+          "name": "Y",
+          "description": "Radar Y in mm, as the sensor reports it."
+        },
+        "radius": {
+          "name": "Radius",
+          "description": "Targets within this distance are ignored."
+        },
+        "clear": {
+          "name": "Clear",
+          "description": "Remove all ignore zones of the room."
+        }
+      }
     }
   }
 }

@@ -494,6 +494,32 @@
           "description": "Alle für den Raum gesetzten Türen entfernen."
         }
       }
+    },
+    "set_ignore_zone": {
+      "name": "Störzone setzen",
+      "description": "Eine Stelle, die das Radar dieses Raums als Ziel meldet, obwohl dort niemand ist, z. B. ein 3D-Drucker oder Ventilator. Ziele dort zählen nie als Person.",
+      "fields": {
+        "room": {
+          "name": "Raum",
+          "description": "Raum: Eintrags-ID oder eine beliebige Entität des Raums."
+        },
+        "x": {
+          "name": "X",
+          "description": "Radar-X in mm, wie der Sensor es meldet."
+        },
+        "y": {
+          "name": "Y",
+          "description": "Radar-Y in mm, wie der Sensor es meldet."
+        },
+        "radius": {
+          "name": "Radius",
+          "description": "Ziele innerhalb dieses Abstands werden ignoriert."
+        },
+        "clear": {
+          "name": "Entfernen",
+          "description": "Alle Störzonen des Raums entfernen."
+        }
+      }
     }
   }
 }

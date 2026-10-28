@@ -779,3 +779,22 @@ def test_foreign_radar_ghost_in_a_room_its_own_radar_watches_is_dropped():
     assert ghost in without_foreign_ghosts([ghost, seen], rooms, coverage, {"bath", "kitchen"})
     # Bathroom radar offline: nobody watches, the sighting stays.
     assert without_foreign_ghosts([ghost], rooms, coverage, {"kitchen"}) == [ghost]
+
+
+async def test_ignore_zone_is_never_a_person(hass: HomeAssistant, flat: Flat, monkeypatch) -> None:
+    await flat.setup(monkeypatch)
+    _, (lx, ly) = SENSORS["bed"]
+    printer = [1000, 3000]
+    await hass.services.async_call(
+        DOMAIN,
+        "set_ignore_zone",
+        {"room": flat.entries["bed"].entry_id, "x": printer[0] - lx, "y": printer[1] - ly, "radius": 400},
+        blocking=True,
+    )
+    await flat.walk([[1100, 3050]] * 8)  # the printer, slightly jittering
+    assert hass.states.get("binary_sensor.bedroom").state == "off"
+    await flat.walk([[2500, 1500]] * 4)  # somebody elsewhere in the room
+    assert hass.states.get("binary_sensor.bedroom").state == "on"
+    assert hass.data[DOMAIN].home.data["ignore"][flat.entries["bed"].entry_id] == [
+        [printer[0] - lx, printer[1] - ly, 400]
+    ]

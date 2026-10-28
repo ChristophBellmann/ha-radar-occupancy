@@ -110,6 +110,34 @@ set_exit:
     clear:
       selector:
         boolean:
+set_ignore_zone:
+  fields:
+    room: *room
+    x:
+      selector:
+        number:
+          min: -10000
+          max: 10000
+          mode: box
+          unit_of_measurement: mm
+    y:
+      selector:
+        number:
+          min: 0
+          max: 10000
+          mode: box
+          unit_of_measurement: mm
+    radius:
+      default: 500
+      selector:
+        number:
+          min: 100
+          max: 3000
+          mode: box
+          unit_of_measurement: mm
+    clear:
+      selector:
+        boolean:
 set_door:
   fields:
     room: *room

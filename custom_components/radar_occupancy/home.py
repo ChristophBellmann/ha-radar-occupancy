@@ -170,7 +170,7 @@ class Home:
         # People living here incl. regular guests: an upper bound for the counts.
         self.max_people: float = settings.get("max_people", 2)
         data = manager.saved.setdefault("map", {})
-        for key in ("calibrations", "floors", "exits", "doors", "people"):
+        for key in ("calibrations", "floors", "exits", "doors", "people", "ignore"):
             data.setdefault(key, {})
         if data.get("counting_version", 1) < 2:
             # Old additive arrival counts can contain arbitrarily many ghosts.
@@ -328,6 +328,8 @@ class Home:
         # sensor (seen: 20 cm, two thirds of all hall readings in a night);
         # nobody stands there. "Take over from" can widen this per room.
         near = max(const.NEAR_FIELD, float(options.get(CONF_TAKEOVER_MIN) or 0))
+        # Spots marked as never a person: a 3D printer or fan in a corner.
+        ignore = self.data.get("ignore", {}).get(room.entry_id, [])
         targets = []
         for index, (kx, ky) in enumerate(TARGET_PAIRS, 1):
             if not options.get(kx) or not options.get(ky):
@@ -335,6 +337,8 @@ class Home:
             states = [self.hass.states.get(options[kx]), self.hass.states.get(options[ky])]
             x, y = (number(s) for s in states)
             if x is None or y is None or math.hypot(x, y) < near:
+                continue
+            if any(math.hypot(x - zx, y - zy) <= zr for zx, zy, zr in ignore):
                 continue
             # last_reported also moves when the value stays the same.
             age = max((now - s.last_reported).total_seconds() for s in states)
@@ -476,6 +480,7 @@ class Home:
                 "approach_polygons": approach,
                 "approach_source": "manual" if manual_approach else "map" if approach else None,
                 "exits": self.data["exits"].get(room_id, []),
+                "ignore": self.data["ignore"].get(room_id, []),
                 "doors": [dict(d) for d in self.data["doors"].get(room_id, [])],
                 "targets": targets,
                 "sub_areas": [{"id": aid, "name": a.entry.title} for aid, a in sub_areas],
@@ -788,6 +793,16 @@ class Home:
         else:
             self._floor_of(room_id)
             self.data["exits"].setdefault(room_id, []).append([round(point[0]), round(point[1])])
+        self.manager.save()
+        self.update()
+
+    def set_ignore(self, room_id: str, zone: list[float] | None) -> None:
+        """Never count targets of this room's radar within `radius` of (x, y)
+        (radar millimetres, as the sensor reports them). None clears all."""
+        if zone is None:
+            self.data["ignore"].pop(room_id, None)
+        else:
+            self.data["ignore"].setdefault(room_id, []).append([round(v) for v in zone])
         self.manager.save()
         self.update()
 

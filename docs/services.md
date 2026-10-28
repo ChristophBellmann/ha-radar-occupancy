@@ -45,3 +45,22 @@ Fields of `start_simulation` and `measure_simulation`:
 | `see_through_doors` | sight through open doorways (default on) |
 
 Examples: [simulate a walk](simulation.md), [measure the light delay](measuring-latency.md).
+
+## set_ignore_zone
+
+A spot the room's radar reports as a target although nobody is there (3D
+printer, fan, curtain in a draught). Coordinates are the radar's own (as the
+`x`/`y` sensors show them), so the zone survives a new map calibration.
+
+```yaml
+action: radar_occupancy.set_ignore_zone
+data:
+  room: binary_sensor.radar_office
+  x: -2180
+  y: 5790
+  radius: 550  # mm, default 500
+```
+
+Find the spot as the target that stays within a few decimetres for hours.
+Keep the radius clear of doorways, or people walking in disappear there.
+`clear: true` removes all zones of the room.

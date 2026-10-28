@@ -130,6 +130,14 @@ def _register_services(hass: HomeAssistant) -> None:
         else:
             raise HomeAssistantError(translation_domain=DOMAIN, translation_key="exit_point")
 
+    async def set_ignore_zone(call: ServiceCall) -> None:
+        if call.data["clear"]:
+            home().set_ignore(room(call), None)
+        elif "x" in call.data and "y" in call.data:
+            home().set_ignore(room(call), [call.data["x"], call.data["y"], call.data["radius"]])
+        else:
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="exit_point")
+
     async def set_door(call: ServiceCall) -> None:
         if call.data["clear"]:
             home().set_door(room(call), None, None)
@@ -212,6 +220,18 @@ def _register_services(hass: HomeAssistant) -> None:
                     **ROOM,
                     vol.Optional("x"): COORD,
                     vol.Optional("y"): COORD,
+                    vol.Optional("clear", default=False): cv.boolean,
+                }
+            ),
+        ),
+        "set_ignore_zone": (
+            set_ignore_zone,
+            vol.Schema(
+                {
+                    **ROOM,
+                    vol.Optional("x"): COORD,
+                    vol.Optional("y"): COORD,
+                    vol.Optional("radius", default=500): vol.All(vol.Coerce(float), vol.Range(min=100, max=3000)),
                     vol.Optional("clear", default=False): cv.boolean,
                 }
             ),

@@ -31,6 +31,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
             "lights": snapshot["lights"],
             "calibrations": home.calibrations,
             "exits": home.data.get("exits", {}),
+            "ignore": home.data.get("ignore", {}),
             "marked_doors": home.data.get("doors", {}),
         }
     elif kind == KIND_PLAN and manager.home is not None:

@@ -389,7 +389,7 @@ class RadarOccupancyManager:
     async def async_forget(self, entry_id: str) -> None:
         self.saved.pop(entry_id, None)
         if self.saved.get("map"):
-            for key in ("calibrations", "exits", "doors", "people"):
+            for key in ("calibrations", "exits", "doors", "people", "ignore"):
                 self.saved["map"].get(key, {}).pop(entry_id, None)
         await self.store.async_save(self.saved)
 

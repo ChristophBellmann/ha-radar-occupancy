@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.1
+
+- Ignore zones: `radar_occupancy.set_ignore_zone` marks a spot in a room
+  radar's own coordinates (x, y, radius) whose targets never count as a
+  person, e.g. a 3D printer the radar sees for hours in a corner. Find it as
+  the target that stays within a few decimetres for hours; keep the radius
+  clear of doorways. Shown in diagnostics; `clear` removes all of a room.
+
 ## 0.4.0
 
 Checked by replaying a whole recorded day (14 h, seven LD2450, two floors)
