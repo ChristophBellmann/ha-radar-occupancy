@@ -166,7 +166,7 @@ def _register_services(hass: HomeAssistant) -> None:
     async def release(call: ServiceCall) -> None:
         manager = hass.data[DOMAIN]
         target = manager.rooms[room(call)]
-        if target.room.presence:
+        if target.room.presence and not (manager.home and manager.home.only_ignored(target)):
             raise HomeAssistantError(translation_domain=DOMAIN, translation_key="target_present")
         target.room.release()
         if manager.home:

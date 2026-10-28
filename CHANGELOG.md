@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.3
+
+- Release (button and `radar_occupancy.release`) works while the room's
+  presence output is on only for targets in an ignore zone. A 3D printer
+  kept the office's LD2450 presence on all night and the release was always
+  refused.
+
 ## 0.4.2
 
 Doors between two floor maps and the front door. Checked by replaying the

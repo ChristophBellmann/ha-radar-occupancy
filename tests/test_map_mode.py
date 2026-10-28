@@ -798,3 +798,23 @@ async def test_ignore_zone_is_never_a_person(hass: HomeAssistant, flat: Flat, mo
     assert hass.data[DOMAIN].home.data["ignore"][flat.entries["bed"].entry_id] == [
         [printer[0] - lx, printer[1] - ly, 400]
     ]
+
+
+async def test_release_while_only_the_printer_is_seen(hass: HomeAssistant, flat: Flat, monkeypatch) -> None:
+    await flat.setup(monkeypatch)
+    _, (lx, ly) = SENSORS["bed"]
+    bed = flat.entries["bed"].entry_id
+    await flat.walk([[2500, 1500]] * 4)
+    assert flat.people("bed") == 1
+    await hass.services.async_call(
+        DOMAIN, "set_ignore_zone", {"room": bed, "x": 1000 - lx, "y": 3000 - ly, "radius": 400}, blocking=True
+    )
+    # Its presence output stays on for the printer alone: release still works.
+    await flat.walk([[1100, 3050]] * 4)
+    await hass.services.async_call(DOMAIN, "release", {"room": "binary_sensor.bedroom"}, blocking=True)
+    await flat.tick(1)
+    assert flat.people("bed") == 0
+    # Somebody outside the zone: refused.
+    await flat.walk([[2500, 1500]] * 4)
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(DOMAIN, "release", {"room": "binary_sensor.bedroom"}, blocking=True)

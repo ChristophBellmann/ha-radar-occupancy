@@ -319,6 +319,25 @@ class Home:
                 ids.update(options[k] for k in pair if options.get(k))
         return ids
 
+    def only_ignored(self, room: RoomTarget) -> bool:
+        """The sensor reports presence, but every target it shows lies in an
+        ignore zone (a 3D printer): nobody to protect from a release."""
+        zones = self.data.get("ignore", {}).get(room.entry_id, [])
+        if not zones:
+            return False
+        options = room.entry.options
+        seen = False
+        for kx, ky in TARGET_PAIRS:
+            if not options.get(kx) or not options.get(ky):
+                continue
+            x, y = number(self.hass.states.get(options[kx])), number(self.hass.states.get(options[ky]))
+            if x is None or y is None or (x == 0 and y == 0):
+                continue
+            if not any(math.hypot(x - zx, y - zy) <= zr for zx, zy, zr in zones):
+                return False
+            seen = True
+        return seen
+
     def live_targets(self, room: RoomTarget) -> list[dict[str, Any]]:
         """Fresh targets of a room sensor in its own coordinates."""
         options = room.entry.options
