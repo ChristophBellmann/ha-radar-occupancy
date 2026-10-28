@@ -531,3 +531,72 @@ class EchoTests(PresenceTests):
             self.p.step(self.t, [("oben", point, "Schlafzimmer", "Schlafzimmer")])
         self.idle(4, extra=[[2000, 1500]])
         self.assertEqual((self.p.count("Gang"), self.p.count("Schlafzimmer")), (0, 1))
+
+
+class BesideTheDoorTests(PresenceTests):
+    """Labor und Büro, 27.10.2026: Schreibtisch 1,2–1,9 m vor der Tür,
+    Deckenradar im Nebenraum mit Spiegelbildern jenseits der Wand."""
+
+    def bad(self, point):
+        return ("oben", point, "Bad", "Bad")
+
+    def gang(self, point):
+        return ("oben", point, "Gang", "Gang")
+
+    def leave_bad_to_door(self):
+        for point in [[10000, 1000]] * 4 + self.walk([10000, 1000], [8300, 1000], 4):
+            self.t += 0.5
+            self.p.step(self.t, [self.bad(point)])
+        self.assertEqual(self.p.count("Bad"), 1)
+
+    def test_vanishing_at_the_door_and_appearing_at_a_desk_beside_it_moves(self):
+        self.leave_bad_to_door()
+        self.idle(3)
+        # Das Gangradar sieht die Tür spät: erst am Schreibtisch, 1,7 m entfernt.
+        for _ in range(8):
+            self.t += 0.5
+            self.p.step(self.t, [self.gang([6400, 1500])])
+        self.assertEqual((self.p.count("Bad"), self.p.count("Gang")), (0, 1))
+
+    def test_held_coordinates_do_not_use_up_the_pairing_window(self):
+        self.leave_bad_to_door()
+        # Am Schreibtisch schon gesehen, während das Badradar die Türstelle 6 s hält.
+        for _ in range(12):
+            self.t += 0.5
+            self.p.step(self.t, [self.bad([8300, 1000]), self.gang([6400, 1500])])
+        for _ in range(10):
+            self.t += 0.5
+            self.p.step(self.t, [self.gang([6400, 1500])])
+        self.assertEqual((self.p.count("Bad"), self.p.count("Gang")), (0, 1))
+
+    def test_followed_through_the_door_to_somebody_seen_there_is_gone(self):
+        sitting = [5000, 1500]
+        for _ in range(8):
+            self.t += 0.5
+            self.p.step(self.t, [self.gang(sitting)])
+        self.leave_bad_to_door()
+        # Das Badradar folgt durch die Tür, zuletzt neben beide Umrisse gehalten.
+        for point in [[7850, 1000], [7900, 2300], [7900, 2300]]:
+            self.t += 0.5
+            self.p.step(self.t, [self.bad(point), self.gang(sitting)])
+        self.idle(4, extra=[sitting])
+        self.assertEqual((self.p.count("Bad"), self.p.count("Gang")), (0, 1))
+
+    def test_target_behind_a_wall_shows_nobody(self):
+        # Spiegelbild 30 cm hinter der Außenwand, weit weg von jeder Tür.
+        for _ in range(20):
+            self.t += 0.5
+            self.p.step(self.t, [("oben", [-300, 2500], "Schlafzimmer", "Schlafzimmer")])
+        self.assertEqual(self.p.count("Schlafzimmer"), 0)
+
+    def test_target_seen_through_the_door_in_the_next_room_shows_nobody(self):
+        for _ in range(20):
+            self.t += 0.5
+            self.p.step(self.t, [("oben", [4600, 1500], "Schlafzimmer", "Schlafzimmer")])
+        self.assertEqual(self.p.count("Schlafzimmer"), 0)
+
+    def test_just_outside_the_outline_at_the_door_counts_behind_the_wall_not(self):
+        for _ in range(20):
+            self.t += 0.5
+            self.p.step(self.t, [("oben", [3800, 1000], "Schlafzimmer", "Schlafzimmer"), ("oben", [3950, 4200], "Schlafzimmer", "Schlafzimmer")])
+        self.assertEqual(self.p.count("Schlafzimmer"), 1)

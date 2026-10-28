@@ -45,6 +45,7 @@ SUB_SHADOW = 3000  # mm: somebody this close to a door of the parent room, seen 
 SPOT_RADIUS = 1000  # mm: approaches starting here again (a desk chair) are no walk to the door
 SPOT_MEMORY = 14400.0  # s: how long such a starting point is remembered without a passage (a passage clears it)
 PAIR_WINDOW = 8.0  # s: vanishing at a door and appearing on the other side
+PAIR_NEAR = 2000  # mm: appearing this far behind a door where somebody just vanished (a desk beside the door)
 REACQUIRE_WINDOW = 15.0  # s: a nearby reappearance after radar dropout is not a new entrant
 UNSEEN_PASS = 2.0  # s: door into an area no sensor sees
 CONFIRM_ONE = 1.0  # s: first target in an empty room
@@ -305,6 +306,7 @@ class Presence:
             and not self._echo(t, now)
             and not self._behind_far_door(t)
             and not self._shadowed(t, now)
+            and not self._beyond_wall(t)
         ]
         first = [t for t in tracks if t.age(now) >= CONFIRM_ONE]
         if not first:
@@ -315,6 +317,27 @@ class Presence:
             if all(math.dist(track.point, other.point) >= SEPARATION for other in chosen):
                 chosen.append(track)
         return max(1, len(chosen))
+
+    def _beyond_wall(self, track):
+        """Outside the outline and either inside the next room (seen through
+        the open door: somebody there, not here) or nowhere near a door
+        (behind a wall, where nobody stands; a ceiling radar mirrors people
+        beside it out there). Such a target alone shows nobody in this room."""
+        polygon = self.rooms.get(track.room, {}).get("polygon")
+        if not polygon or inside(track.point, polygon):
+            return False
+        if any(
+            name != track.room
+            and info["floor"] == track.floor
+            and info.get("polygon")
+            and inside(track.point, info["polygon"])
+            for name, info in self.rooms.items()
+        ):
+            return True
+        return all(
+            (gap := door.distance(track.floor, track.point)) is None or gap > DOOR_NEAR
+            for door in self.doors_of(track.room)
+        )
 
     def observed(self, room, now):
         """A confirmed target in the latest measurement, evaluated slightly later."""
@@ -732,7 +755,24 @@ class Presence:
             return
         door = self._door_near(track, now, False) or self._door_near(track, now, False, ARRIVE_NEAR, track.birth_point)
         if door is None:
-            # Appeared in the middle of the room: someone who was there, sitting still.
+            # Somebody vanished at a door of this room a moment ago: a radar
+            # sees its doorway late, the first report can be at a desk beside
+            # it. The vanishing on the other side is the evidence.
+            behind = next(
+                (
+                    d
+                    for d in self.deaths
+                    if d["to"] == track.room
+                    and now - d["time"] <= PAIR_WINDOW
+                    and (gap := d["door"].distance(track.floor, track.birth_point)) is not None
+                    and gap <= PAIR_NEAR
+                ),
+                None,
+            )
+            if behind is not None:
+                self.deaths.remove(behind)
+                self.transfer(behind["room"], track.room, now)
+            # Otherwise appeared in the middle of the room: someone who was there, sitting still.
             return
         other = door.other(track.room)
         if self._moving_in(track, door):
@@ -792,6 +832,12 @@ class Presence:
     def _died(self, track, now):
         if not track.counted or track.room is None:
             return
+        through = self._followed_through(track)
+        if through is not None and self.visible(through.other(track.room), now):
+            # The radar followed them through the door into the next room,
+            # whose own radar sees somebody there: counted there already.
+            self._change(track.room, -1, MOVED, now, track.room, through.other(track.room))
+            return
         door = self._door_near(track, now, True) or self._door_beyond(track) or self._behind_far_door(track)
         if door is None:
             # Lingering at the door, not walking at it: somebody who already
@@ -821,11 +867,14 @@ class Presence:
         other = door.other(track.room)
         if other == OUTSIDE or track.room not in self.rooms:
             return False
+        # The window starts when they stopped at the door, not when the held
+        # coordinates finally ran out: that hold alone can use up the window.
+        since = max(self._stopped(track), track.seen - ECHO_HOLD) - PAIR_WINDOW
         early = next(
             (
                 a
                 for a in self.arrived_unpaired
-                if 0 <= now - a["time"] <= PAIR_WINDOW
+                if since <= a["time"] <= now
                 and a["room"] != track.room
                 and (a["room"] == other or a["from"] == other)
             ),
@@ -841,13 +890,41 @@ class Presence:
         if behind is None or not any(
             t.room == other
             and t.counted
-            and 0 <= now - t.born <= PAIR_WINDOW
-            and math.dist(t.birth_point, behind) <= ARRIVE_NEAR
+            and since <= t.born <= now
+            and math.dist(t.birth_point, behind) <= PAIR_NEAR
             for t in self.tracks
         ):
             return False
         self._change(track.room, -1, MOVED, now, track.room, other)
         return True
+
+    def _followed_through(self, track):
+        """The door this track went through into a neighbouring room in its
+        last seconds, ending outside its own room: within 1.3 m of the door,
+        inside the neighbour's outline. The last held spot alone may already
+        lie beside both outlines."""
+        polygon = self.rooms.get(track.room, {}).get("polygon")
+        if not polygon or inside(track.point, polygon):
+            return None
+        for t, point in reversed(track.history):
+            if track.seen - t > ECHO_HOLD + TRACK_TTL:
+                break
+            if inside(point, polygon):
+                break
+            for door in self.doors_of(track.room):
+                other = door.other(track.room)
+                info = self.rooms.get(other, {})
+                gap = door.distance(track.floor, point)
+                if (
+                    other in self.rooms
+                    and info.get("floor") == track.floor
+                    and info.get("polygon")
+                    and inside(point, info["polygon"])
+                    and gap is not None
+                    and gap <= DOOR_PASS
+                ):
+                    return door
+        return None
 
     def _door_beyond(self, track):
         """Lost outside its room, inside a neighbour it has a door to (within

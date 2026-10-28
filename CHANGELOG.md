@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.4.4
+
+Doors next to desks and ceiling radars that see through them. Checked by
+replaying the recorded day (27.10.2026, all seven LD2450) through 0.4.3 and
+0.4.4 with the same doors, exits and ignore zones:
+
+| | 0.4.3 | 0.4.4 |
+| --- | --- | --- |
+| minutes of light while the person was demonstrably elsewhere | 249 | 129 |
+| of which the lab (ceiling radar beside the office) | 123 | 4 |
+| light on without anybody coming (incl. pre-light) | 29 | 27 |
+| light decision vs. entering (median / 90 %) | −1.81 s / −0.72 s | −1.76 s / −0.72 s |
+| entries without light / light off while still there | 0 / 0 | 0 / 0 |
+
+- Vanishing at a door pairs with an appearance up to 2 m behind it (was
+  1.5 m). Radars see doorways late; coming back to a desk beside the door,
+  the first report is at the desk.
+- The pairing window starts when the track stopped at the door, not when
+  the radar finally drops the held coordinates (up to 6 s). That hold alone
+  used up the 8 s window.
+- A track the radar followed through a door into the next room, ending
+  outside its own room while the next room's radar sees somebody there,
+  leaves its room. Until now the room stayed held whenever nobody new
+  appeared on the other side (someone already sitting there).
+- A target outside the room's outline counts nobody in the room when it is
+  inside another room (seen through the open door) or nowhere near a door
+  (behind a wall: a ceiling radar mirrors people beside it out there). Held
+  people stay held; such a target only no longer switches the room on.
+
 ## 0.4.3
 
 - Release (button and `radar_occupancy.release`) works while the room's
