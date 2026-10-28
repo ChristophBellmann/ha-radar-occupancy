@@ -874,9 +874,7 @@ class Presence:
             (
                 a
                 for a in self.arrived_unpaired
-                if since <= a["time"] <= now
-                and a["room"] != track.room
-                and (a["room"] == other or a["from"] == other)
+                if since <= a["time"] <= now and a["room"] != track.room and (a["room"] == other or a["from"] == other)
             ),
             None,
         )
@@ -888,10 +886,7 @@ class Presence:
         # person held there (a reacquired place): counted already.
         behind = door.at(self.rooms.get(other, {}).get("floor"))
         if behind is None or not any(
-            t.room == other
-            and t.counted
-            and since <= t.born <= now
-            and math.dist(t.birth_point, behind) <= PAIR_NEAR
+            t.room == other and t.counted and since <= t.born <= now and math.dist(t.birth_point, behind) <= PAIR_NEAR
             for t in self.tracks
         ):
             return False
