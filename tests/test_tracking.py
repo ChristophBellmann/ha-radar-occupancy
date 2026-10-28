@@ -598,5 +598,11 @@ class BesideTheDoorTests(PresenceTests):
     def test_just_outside_the_outline_at_the_door_counts_behind_the_wall_not(self):
         for _ in range(20):
             self.t += 0.5
-            self.p.step(self.t, [("oben", [3800, 1000], "Schlafzimmer", "Schlafzimmer"), ("oben", [3950, 4200], "Schlafzimmer", "Schlafzimmer")])
+            self.p.step(
+                self.t,
+                [
+                    ("oben", [3800, 1000], "Schlafzimmer", "Schlafzimmer"),
+                    ("oben", [3950, 4200], "Schlafzimmer", "Schlafzimmer"),
+                ],
+            )
         self.assertEqual(self.p.count("Schlafzimmer"), 1)
