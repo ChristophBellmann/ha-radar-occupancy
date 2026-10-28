@@ -64,6 +64,19 @@ because it switches lights off) and the passage is **measured**:
   within 8 s while nobody was visible in the hall (dead corners in front of
   the hall doors).
 
+A track that walked to a door, **stopped** there (opening it) and then
+vanished counts the walk before the stop (up to **6 s**): radars hold the
+last spot while somebody stands still, so the walk would otherwise have aged
+out. This is how leaving through the front door is seen.
+
+Standing within **80 cm** of a door without walking at it and vanishing, while
+somebody was just seen arriving right behind that door, is that person
+moving there.
+
+After somebody left a room, a target its radar keeps reporting at the same
+spot for up to **6 s** is their echo, not a new person (unless it walks
+**70 cm** away).
+
 Doors into an area no sensor sees (stairs, an unsensed room) need the
 measured crossing; the person is handed to the other side after **2 s**
 unseen. Without evidence, the room stays held.
@@ -76,7 +89,7 @@ somebody appears next door.
 - **Approach.** A target within **1.5 m** of a door that came at least
   **30 cm** closer, walking at the door (within **35°**), pre-lights the room
   behind it, once per walk. Further approaches from the spot where one ended
-  without passing (a desk chair) pre-light nothing for **15 min**; passing the
+  without passing (a desk chair) pre-light nothing for **4 h**; passing the
   door clears that. Walking more than 2.5 m away re-arms the door.
 - **Through the door.** The first measurement of a valid door passage lights
   the room ahead; the count follows after confirmation (0.5 s).
@@ -86,7 +99,27 @@ somebody appears next door.
 - **Expected arrival.** A counted track lost near a door it walked towards,
   whose other side no sensor covers, makes the room ahead expected: full light
   at once. Occupancy does not change without proof; if nobody turns up, the
-  light fades out after 20 s.
+  light fades out 20 s after the last such sighting.
+
+## Doors between two floor maps
+
+Two robot maps often both show part of the same place: the upstairs robot
+sees down the stairs into the lower hall, the downstairs robot sees that
+hall up to the first step. A door marked with `set_door` from a room on one
+map to a room on the other, with `x`/`y` on this map and `to_x`/`to_y` on the
+other one, links them; it replaces the robot's passage at that doorway
+(within 1 m), which otherwise led "outside".
+
+- Leaving through it pairs with an arrival at its point on the other map,
+  as at any door.
+- A radar seeing through it (more than 10 cm outside its room, within 2.5 m
+  of the door) does not count anybody there: that room has its own radar.
+  The sighting still lights its own room early for somebody walking in, and
+  losing a counted person there is leaving through that door.
+- While one radar still follows a counted person at or through the door,
+  the other radar's target at its side of the door is the same person; it
+  counts once the first radar lets go of them or they walk on more than
+  2.5 m.
 
 ## Household limit
 

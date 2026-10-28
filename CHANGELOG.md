@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.4.2
+
+Doors between two floor maps and the front door. Checked by replaying the
+recorded day and a walk from the office out of the front door, back in and
+up to the kitchen. Compared with 0.4.1 on the day:
+
+| | 0.4.1 | 0.4.2 |
+| --- | --- | --- |
+| light decision vs. entering (median / 90 %) | −1.5 s / +0.7 s | −1.8 s / −0.7 s |
+| hall, median | +0.1 s | −2.3 s |
+| light on without anybody coming (incl. pre-light) | 29 | 33 |
+| entries without light / light off while still there | 0 / 0 | 0 / 0 |
+
+- `set_door` takes `to_x`/`to_y`: the same doorway on the map of the room
+  behind it. Two robot maps that both show part of one hall (stairs between
+  them) are linked: walking from the office into the hall is a move, no
+  longer leaving the home and appearing in the hall. The robot passage at
+  the marked doorway is replaced.
+- A radar seeing through such a door counts nobody behind it; the other
+  side's radar counts that person once. Its sighting still lights its own
+  room early.
+- Leaving through a door after stopping there (unlocking the front door)
+  counts: the walk before the stop is measured, the held last spot no longer
+  pushes it out of the track history.
+- Lingering at a door and vanishing while somebody was just seen arriving
+  behind it is a move.
+- The coordinates a radar holds for a few seconds after somebody left are
+  no new person.
+- A pre-light lasts while the radar ahead still sees somebody waiting at the
+  door.
+- A starting point of approaches that did not pass the door (a desk chair)
+  is remembered for 4 h instead of 15 min; passing the door still clears it.
+
 ## 0.4.1
 
 - Ignore zones: `radar_occupancy.set_ignore_zone` marks a spot in a room

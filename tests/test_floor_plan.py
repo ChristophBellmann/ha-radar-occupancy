@@ -227,6 +227,21 @@ async def test_door_to_the_same_room_is_refused(
     assert hass.data[DOMAIN].home.data["doors"].get(room) is None
 
 
+async def test_door_keeps_its_point_on_the_other_floor_map(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, tmp_path: Path
+) -> None:
+    plan = Plan(hass, freezer, tmp_path)
+    await plan.setup()
+    bed, hall = plan.rooms["bed"].entry_id, plan.rooms["hall"].entry_id
+    await plan.call("set_door", room=bed, clear=True)
+    await plan.call("set_door", room=bed, to=hall, x=4000, y=1000, to_x=-4050, to_y=5620)
+    assert hass.data[DOMAIN].home.data["doors"][bed] == [{"to": hall, "point": [4000, 1000], "far": [-4050, 5620]}]
+    # Both rooms lie on this plan: the point on the other map does not apply.
+    await plan.tick(1)
+    door = next(d for d in hass.data[DOMAIN].home.tracking.doors if {d.a, d.b} == {bed, hall})
+    assert door.far is None
+
+
 async def test_plan_image_is_served(hass: HomeAssistant, freezer, tmp_path: Path, hass_client) -> None:
     assert await async_setup_component(hass, "http", {})
     plan = Plan(hass, freezer, tmp_path)

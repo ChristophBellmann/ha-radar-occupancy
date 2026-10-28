@@ -337,6 +337,10 @@ class LightController:
         ):
             st.prelit_since, st.prelit_full = now, False
             self.switch_on(light, targets, "approach")
+        elif expected and st.prelit_since:
+            # Still waiting at the door (the radar ahead sees them there):
+            # the pre-light lasts until they come in or go.
+            st.prelit_since = now
         elif st.prelit_since and not approaching and not expected and now - st.prelit_since >= const.PRELIT_TIMEOUT:
             st.prelit_since = None
             if self.hass.states.is_state(light, STATE_ON):

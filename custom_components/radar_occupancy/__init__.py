@@ -154,7 +154,8 @@ def _register_services(hass: HomeAssistant) -> None:
                     translation_key="unknown_room",
                     translation_placeholders={"room": other},
                 ) from err
-        home().set_door(room(call), other, [call.data["x"], call.data["y"]])
+        far = [call.data["to_x"], call.data["to_y"]] if "to_x" in call.data and "to_y" in call.data else None
+        home().set_door(room(call), other, [call.data["x"], call.data["y"]], far)
 
     async def set_floor(call: ServiceCall) -> None:
         home().set_floor(call.data["camera"], call.data.get("name"), call.data.get("flip"))
@@ -244,6 +245,8 @@ def _register_services(hass: HomeAssistant) -> None:
                     vol.Optional("to"): cv.string,
                     vol.Optional("x"): COORD,
                     vol.Optional("y"): COORD,
+                    vol.Optional("to_x"): COORD,
+                    vol.Optional("to_y"): COORD,
                     vol.Optional("clear", default=False): cv.boolean,
                 }
             ),

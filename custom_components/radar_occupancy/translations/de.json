@@ -489,6 +489,14 @@
           "name": "Y",
           "description": "Karten-Y in mm."
         },
+        "to_x": {
+          "name": "Nach X",
+          "description": "Nur wenn der Raum hinter der Tür auf einer anderen Etagenkarte liegt: derselbe Durchgang dort, Karten-X in mm."
+        },
+        "to_y": {
+          "name": "Nach Y",
+          "description": "Karten-Y in mm des Durchgangs auf der anderen Etagenkarte."
+        },
         "clear": {
           "name": "Entfernen",
           "description": "Alle für den Raum gesetzten Türen entfernen."

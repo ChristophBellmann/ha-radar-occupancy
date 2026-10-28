@@ -159,6 +159,20 @@ set_door:
           max: 100000
           mode: box
           unit_of_measurement: mm
+    to_x:
+      selector:
+        number:
+          min: -100000
+          max: 100000
+          mode: box
+          unit_of_measurement: mm
+    to_y:
+      selector:
+        number:
+          min: -100000
+          max: 100000
+          mode: box
+          unit_of_measurement: mm
     clear:
       selector:
         boolean:

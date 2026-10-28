@@ -63,6 +63,7 @@ _LOGGER = logging.getLogger(__name__)
 
 EDGE_TOLERANCE = 400  # mm: outline and calibration are a few decimetres off
 MIN_DOOR_WIDTH = 500  # mm: narrower contacts between map rooms are no doors
+MARKED_DOOR_REPLACES = 1000  # mm: a door marked by hand replaces map passages this close
 APPROACH_RANGE = 1500  # mm: "in front of the room" for the zone display
 TARGET_PAIRS = ((CONF_X, CONF_Y), (CONF_X2, CONF_Y2), (CONF_X3, CONF_Y3))
 
@@ -510,24 +511,38 @@ class Home:
                 if options.get(CONF_MAP_CAMERA) == camera and options.get(CONF_MAP_ROOM):
                     segment_room[options[CONF_MAP_ROOM]] = rid
                     lists[options[CONF_MAP_ROOM]] = options.get(CONF_DOOR_ROOMS) or None
+            marked_here = [
+                (rid, door["point"])
+                for rid, marked in self.data["doors"].items()
+                if manager.rooms.get(rid) and manager.rooms[rid].entry.options.get(CONF_MAP_CAMERA) == camera
+                for door in marked
+            ]
             candidates = []
             for name_a, name_b, point, width in floor.get("passages", []):
                 if width < MIN_DOOR_WIDTH or not door_allowed(name_a, name_b, lists):
                     continue
                 a, b = segment_room.get(name_a, OUTSIDE), segment_room.get(name_b, OUTSIDE)
+                # A door marked by hand at this doorway replaces the map passage
+                # (e.g. one that leads to the same hall on the other floor's map).
+                if any(rid in (a, b) and math.dist(p, point) <= MARKED_DOOR_REPLACES for rid, p in marked_here):
+                    continue
                 if a != b:
-                    candidates.append((a, b, [round(v) for v in point], False))
+                    candidates.append((a, b, [round(v) for v in point], False, None))
             for rid, points in self.data["exits"].items():
                 if manager.rooms.get(rid) and manager.rooms[rid].entry.options.get(CONF_MAP_CAMERA) == camera:
-                    candidates.extend((rid, OUTSIDE, [round(v) for v in p], True) for p in points)
+                    candidates.extend((rid, OUTSIDE, [round(v) for v in p], True, None) for p in points)
             # Doors marked by hand, e.g. on a floor plan that has no room cells.
             for rid, marked in self.data["doors"].items():
                 if manager.rooms.get(rid) and manager.rooms[rid].entry.options.get(CONF_MAP_CAMERA) == camera:
                     for door in marked:
                         other = door["to"] if door["to"] == OUTSIDE or door["to"] in manager.rooms else None
-                        if other is not None:
-                            candidates.append((rid, other, [round(v) for v in door["point"]], other == OUTSIDE))
-            for a, b, point, exit_ in candidates:
+                        if other is None:
+                            continue
+                        far = None
+                        if door.get("far") and other in rooms and rooms[other]["floor"] != camera:
+                            far = (rooms[other]["floor"], [round(v) for v in door["far"]])
+                        candidates.append((rid, other, [round(v) for v in door["point"]], other == OUTSIDE, far))
+            for a, b, point, exit_, far in candidates:
                 if any(side != OUTSIDE and side not in rooms for side in (a, b)):
                     continue
                 covered = {}
@@ -544,10 +559,16 @@ class Home:
                         dx, dy = point[0] - origin[0], point[1] - origin[1]
                         length = math.hypot(dx, dy) or 1
                         probe = [point[0] + 800 * dx / length, point[1] + 800 * dy / length]
+                    if far and side == b:
+                        # The other side lies on another map: probe right at its door point there.
+                        covered[side] = any(
+                            covers(t, m, loc, far[1]) for f, r, t, m, loc in coverage if f == far[0] and r == side
+                        )
+                        continue
                     covered[side] = any(
                         covers(t, m, loc, probe) for f, r, t, m, loc in coverage if f == camera and r == side
                     )
-                door = Door(a, b, camera, point, covered)
+                door = Door(a, b, camera, point, covered, far)
                 door.exit = exit_
                 doors.append(door)
         for rid, info in rooms.items():
@@ -806,17 +827,23 @@ class Home:
         self.manager.save()
         self.update()
 
-    def set_door(self, room_id: str, other: str | None, point: list[float] | None) -> None:
-        """Mark a door from this room to `other` (a room or OUTSIDE); None clears all."""
+    def set_door(
+        self, room_id: str, other: str | None, point: list[float] | None, far: list[float] | None = None
+    ) -> None:
+        """Mark a door from this room to `other` (a room or OUTSIDE); None clears all.
+
+        `far` is the same doorway on the map of `other` when that room lies on
+        another floor map (a hall that both robot maps show in part)."""
         if point is None:
             self.data["doors"].pop(room_id, None)
         else:
             self._floor_of(room_id)
             if other == room_id:
                 raise HomeAssistantError(translation_domain=const.DOMAIN, translation_key="door_same_room")
-            self.data["doors"].setdefault(room_id, []).append(
-                {"to": other, "point": [round(point[0]), round(point[1])]}
-            )
+            door = {"to": other, "point": [round(point[0]), round(point[1])]}
+            if far is not None:
+                door["far"] = [round(far[0]), round(far[1])]
+            self.data["doors"].setdefault(room_id, []).append(door)
         self.manager.save()
         self.update()
         self.manager.evaluate()

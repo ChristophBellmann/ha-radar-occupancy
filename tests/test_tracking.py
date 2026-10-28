@@ -435,3 +435,99 @@ class PathTests(PresenceTests):
             self.p.step(self.t, [obs])
         self.idle(30)
         self.assertEqual(self.p.count("Schlafzimmer"), 1)
+
+
+# Zwei Roboterkarten: unten Büro, oben der Gang mit Treppe, der unten am Büro
+# weitergeht. Die Bürotür liegt auf beiden Karten, die Wohnungstür im Gang.
+#   unten: Büro 0..3000 x 0..4000, Tür bei (1500, 4000)
+#   oben:  Gang 0..1500 x 0..8000, Bürotür bei (750, 7000), Wohnungstür bei (0, 5500)
+FLOORS = {
+    "Büro": {"floor": "unten", "polygon": [[0, 0], [3000, 0], [3000, 4000], [0, 4000]]},
+    "Gang": {"floor": "oben", "polygon": [[0, 0], [1500, 0], [1500, 8000], [0, 8000]]},
+}
+
+
+class FloorLinkTests(unittest.TestCase):
+    def setUp(self):
+        self.p = Presence(
+            FLOORS,
+            [
+                Door("Büro", "Gang", "unten", [1500, 4000], {"Büro": True, "Gang": True}, ("oben", [750, 7000])),
+                Door("Gang", OUTSIDE, "oben", [0, 5500], False),
+            ],
+        )
+        self.t = 0.0
+
+    def step(self, *obs):
+        self.t += 0.5
+        self.p.step(self.t, list(obs))
+
+    def office(self, point):
+        return ("unten", point, "Büro", "Büro")
+
+    def hall(self, point):
+        return ("oben", point, "Gang", "Gang")
+
+    def walk(self, start, end, steps=6):
+        return PresenceTests.walk(None, start, end, steps)
+
+    def idle(self, seconds, *obs):
+        for _ in range(int(seconds / 0.5)):
+            self.step(*obs)
+
+    def sit_in_office(self):
+        for _ in range(4):
+            self.step(self.office([1500, 2000]))
+        self.assertEqual(self.p.count("Büro"), 1)
+
+    def test_out_of_the_office_into_the_hall_of_the_other_map(self):
+        self.sit_in_office()
+        for point in self.walk([1500, 2000], [1500, 3800]):
+            self.step(self.office(point))
+        for point in self.walk([750, 6900], [750, 5000]):
+            self.step(self.hall(point))
+        self.idle(4, self.hall([750, 5000]))
+        self.assertEqual((self.p.count("Büro"), self.p.count("Gang")), (0, 1))
+
+    def test_office_radar_seeing_into_the_hall_counts_nobody_twice(self):
+        # Das Büroradar sieht durch die Tür in den unteren Gang, während das
+        # Gangradar dieselbe Person schon sieht.
+        self.sit_in_office()
+        for point in self.walk([1500, 2000], [1500, 3900]):
+            self.step(self.office(point))
+        for a, b in zip(self.walk([1500, 4000], [1600, 4800]), self.walk([750, 6900], [750, 6000])):
+            self.step(self.office(a), self.hall(b))
+        for point in self.walk([750, 6000], [750, 4000]):
+            self.step(self.hall(point))
+        self.idle(4, self.hall([750, 4000]))
+        self.assertEqual((self.p.count("Büro"), self.p.count("Gang")), (0, 1))
+
+    def test_standing_at_the_front_door_and_vanishing_is_leaving(self):
+        for point in [[750, 2000]] * 4 + self.walk([750, 2000], [-30, 5450], 8):
+            self.step(self.hall(point))
+        # In der Türöffnung: das Radar hält die letzte Position, dann ist sie weg.
+        self.idle(8, self.hall([-30, 5450]))
+        self.idle(4)
+        self.assertEqual(self.p.count("Gang"), 0)
+        self.assertEqual(self.p.reason("Gang")["code"], "went_out")
+
+
+class EchoTests(PresenceTests):
+    def test_held_coordinates_after_leaving_are_nobody_new(self):
+        self.run_path([[6000, 1000]] * 4 + self.walk([6000, 1000], [7600, 1000], 4))
+        self.assertEqual(self.p.count("Gang"), 1)
+        # Bad sieht sie an seiner Tür, das Gangradar hält noch ihre letzte Stelle.
+        for point in self.walk([8300, 1000], [9500, 1500], 6):
+            self.t += 0.5
+            self.p.step(self.t, [("oben", point, "Bad", "Bad"), ("oben", [7600, 1000], "Gang", "Gang")])
+        self.idle(5)
+        self.assertEqual((self.p.count("Gang"), self.p.count("Bad")), (0, 1))
+
+    def test_lingering_at_the_door_and_turning_up_behind_it_moves(self):
+        self.run_path([[6000, 1000]] * 4 + self.walk([6000, 1000], [4600, 1200], 4) + [[4600, 1200]] * 2)
+        # Steht an der Tür, wird drinnen schon gesehen, dann lässt das Gangradar los.
+        for point in self.walk([3500, 1100], [2000, 1500], 6):
+            self.t += 0.5
+            self.p.step(self.t, [("oben", point, "Schlafzimmer", "Schlafzimmer")])
+        self.idle(4, extra=[[2000, 1500]])
+        self.assertEqual((self.p.count("Gang"), self.p.count("Schlafzimmer")), (0, 1))

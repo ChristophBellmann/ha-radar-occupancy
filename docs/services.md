@@ -16,7 +16,7 @@ entry ID or the room's occupancy entity.
 | `reset_calibration` | clear the sensor's calibration |
 | `set_calibration` | import a calibration object (backup/restore) |
 | `set_exit` | exit (stairs, front door) at `x`/`y`, or `clear` |
-| `set_door` | door `to` another room (or `outside`) at `x`/`y`, or `clear` |
+| `set_door` | door `to` another room (or `outside`) at `x`/`y`, or `clear`; `to_x`/`to_y`: the same doorway on the other room's floor map |
 | `set_floor` | display `name` and `flip` of a floor `camera` |
 | `refresh_maps` | reload all maps |
 | `release` | clear a held occupancy of `room` |

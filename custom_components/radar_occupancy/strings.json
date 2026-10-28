@@ -489,6 +489,14 @@
           "name": "Y",
           "description": "Map Y in mm."
         },
+        "to_x": {
+          "name": "To X",
+          "description": "Only when the room behind the door lies on another floor map: the same doorway there, map X in mm."
+        },
+        "to_y": {
+          "name": "To Y",
+          "description": "Map Y in mm of the doorway on the other floor map."
+        },
         "clear": {
           "name": "Clear",
           "description": "Remove all doors marked for the room."
