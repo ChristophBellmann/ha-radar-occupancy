@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>Radar Occupancy</title>
+  <desc>Original radar rings and target; licensed under Apache-2.0 with this project.</desc>
+  <g fill="none" stroke="#087f8c">
+    <circle cx="128" cy="128" r="120" stroke-width="16"/>
+    <circle cx="128" cy="128" r="78" stroke-width="10"/>
+    <circle cx="128" cy="128" r="36" stroke-width="10"/>
+    <path d="M128 128 211 45" stroke-width="14" stroke-linecap="round"/>
+  </g>
+  <circle cx="128" cy="128" r="12" fill="#087f8c"/>
+  <circle cx="183" cy="73" r="20" fill="#f4a261" stroke="#087f8c" stroke-width="6"/>
+</svg>

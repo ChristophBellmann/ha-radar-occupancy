@@ -13,11 +13,17 @@
 
 ## HACS
 
+Radar Occupancy is available as a **custom repository**, not yet in the
+default HACS catalog. Add the repository once before searching for it:
+
 1. HACS → ⋮ → *Custom repositories*.
 2. Repository `https://github.com/ChristophBellmann/ha-radar-occupancy`,
    category *Integration*.
 3. Install *Radar Occupancy*, choose the newest release.
 4. Restart Home Assistant.
+
+The integration includes its own icon, displayed by Home Assistant 2026.3
+and newer. Older supported versions may display a placeholder icon.
 
 ## Manually
 

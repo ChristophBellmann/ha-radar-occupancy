@@ -62,6 +62,9 @@ range, and a sub-area can switch its own light.
 
 ## Installation
 
+Radar Occupancy can be installed through a HACS custom repository. It is
+not yet included in the default HACS catalog.
+
 HACS → ⋮ → *Custom repositories* → `https://github.com/ChristophBellmann/ha-radar-occupancy`,
 category *Integration*. Install *Radar Occupancy* and restart Home Assistant.
 

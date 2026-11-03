@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.5
+
+- Include an original Radar Occupancy icon for Home Assistant 2026.3 and
+  newer, with a high-resolution variant.
+- Enable all HACS validation checks, including brand assets.
+- Clarify installation through a HACS custom repository and distinguish it
+  from inclusion in the default catalog.
+
 ## 0.4.4
 
 Doors next to desks and ceiling radars that see through them. Checked by
