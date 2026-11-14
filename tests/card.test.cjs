@@ -400,3 +400,14 @@ console.log('Karte registriert sich neben einer alten Positionskarte.');
   assert.equal(c.roomStatus({...room,people:2,visible_people:2}),'2 Personen');
   assert.equal(c.roomStatus({...room,people:0,visible_people:0}),'Frei');
 }
+
+const delayCard = new Card();
+delayCard._hass = {language:'de', states:{}};
+delayCard.data = () => ({...data, sensors:[{id:'office',room:'Büro',light:'light.office',run_on:120,entities:{run_on:'number.office_run_on'}}]});
+delayCard.stateObj = () => ({attributes:delayCard.data()});
+delayCard.shadowRoot.querySelectorAll = () => [];
+delayCard.shadowRoot.getElementById = () => ({});
+delayCard.render();
+assert.ok(delayCard.shadowRoot.innerHTML.includes('number.office_run_on'));
+assert.ok(delayCard.shadowRoot.innerHTML.includes('Büro · 120 s'));
+assert.ok(delayCard.shadowRoot.innerHTML.includes('Lichtnachlauf'));

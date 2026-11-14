@@ -651,6 +651,7 @@ class Home:
                 occupancy_reason=room.reason,
                 occupancy_reason_rooms=self.reason_rooms(room_id) if room_id in self.ready else None,
                 hold_enabled=room.room.hold,
+                run_on=room.entry.options.get(const.CONF_RUN_ON, const.DEFAULTS[const.CONF_RUN_ON]),
                 light=room.light,
                 light_mode=lights.mode(room.light),
                 entities=manager.entity_ids(room_id),

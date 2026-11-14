@@ -8,12 +8,17 @@ from homeassistant.const import EntityCategory, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .const import CONF_RUN_ON, DEFAULTS
 from .entity import RadarOccupancyEntity
 from .home import Home
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEntitiesCallback) -> None:
-    home: Home = entry.runtime_data
+    home = entry.runtime_data
+    if not isinstance(home, Home):
+        if home.light:
+            add([RunOnNumber(home, CONF_RUN_ON)])
+        return
     add([FadeNumber(home, "fade_in"), FadeNumber(home, "fade_out"), PeopleNumber(home, "max_people")])
 
 
@@ -47,3 +52,22 @@ class PeopleNumber(FadeNumber):
     _attr_native_step = 1
     _attr_native_unit_of_measurement = None
     _attr_mode = NumberMode.BOX
+
+
+class RunOnNumber(FadeNumber):
+    """Persistent per-room light run-on, in seconds."""
+
+    _attr_native_min_value = 0
+    _attr_native_max_value = 3600
+    _attr_native_step = 15
+    _attr_mode = NumberMode.BOX
+
+    @property
+    def native_value(self) -> float:
+        return float(self.target.entry.options.get(CONF_RUN_ON, DEFAULTS[CONF_RUN_ON]))
+
+    async def async_set_native_value(self, value: float) -> None:
+        self.hass.config_entries.async_update_entry(
+            self.target.entry,
+            options={**self.target.entry.options, CONF_RUN_ON: float(value)},
+        )

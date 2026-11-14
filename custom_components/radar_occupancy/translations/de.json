@@ -195,6 +195,9 @@
       },
       "max_people": {
         "name": "Personen höchstens"
+      },
+      "run_on": {
+        "name": "Lichtnachlauf"
       }
     }
   },

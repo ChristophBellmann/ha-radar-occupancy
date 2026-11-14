@@ -23,8 +23,8 @@ _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-ROOM_PLATFORMS = [Platform.BINARY_SENSOR, Platform.BUTTON, Platform.SENSOR, Platform.SWITCH]
-AREA_PLATFORMS = [Platform.BINARY_SENSOR, Platform.SWITCH]
+ROOM_PLATFORMS = [Platform.NUMBER, Platform.BINARY_SENSOR, Platform.BUTTON, Platform.SENSOR, Platform.SWITCH]
+AREA_PLATFORMS = [Platform.NUMBER, Platform.BINARY_SENSOR, Platform.SWITCH]
 HOME_PLATFORMS = [Platform.NUMBER, Platform.SENSOR, Platform.SWITCH]
 
 COORD = vol.All(vol.Coerce(float), vol.Range(min=-100000, max=100000))

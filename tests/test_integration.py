@@ -353,7 +353,7 @@ async def test_entities_have_unique_ids(hass: HomeAssistant) -> None:
     ids = {e.unique_id for e in er.async_entries_for_config_entry(registry, entry.entry_id)}
     assert ids == {
         f"{entry.entry_id}_{key}"
-        for key in ("occupancy", "last_distance", "release", "learn_door", "auto_light", "only_dark", "hold")
+        for key in ("occupancy", "last_distance", "release", "learn_door", "auto_light", "only_dark", "hold", "run_on")
     }
 
 
@@ -432,3 +432,16 @@ async def test_room_from_radar_device(hass: HomeAssistant) -> None:
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Living room"
     assert result["result"].options["x2_entity"] == "sensor.radar_1_target_2_x"
+
+
+async def test_run_on_number_persists_room_option(hass: HomeAssistant) -> None:
+    entry = room_entry("Office", "office", **{CONF_LIGHT: "light.office", CONF_RUN_ON: 15})
+    await setup(hass, entry)
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id("number", DOMAIN, f"{entry.entry_id}_run_on")
+    assert hass.states.get(entity_id).state == "15.0"
+    await hass.services.async_call("number", "set_value", {"entity_id": entity_id, "value": 120}, blocking=True)
+    await hass.async_block_till_done()
+    assert entry.options[CONF_RUN_ON] == 120
+    assert entry.options[CONF_LIGHT] == "light.office"
+    assert hass.states.get(entity_id).state == "120.0"

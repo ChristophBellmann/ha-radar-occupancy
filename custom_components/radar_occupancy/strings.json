@@ -195,6 +195,9 @@
       },
       "max_people": {
         "name": "People in the home at most"
+      },
+      "run_on": {
+        "name": "Light run-on"
       }
     }
   },

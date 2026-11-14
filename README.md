@@ -579,3 +579,10 @@ Seite nicht gemessen, ist die gemessene Grenzüberquerung erforderlich; sonst
 bleibt die Belegung gehalten. Bei unsicheren Positionen bis 0,8 m neben der
 Raumgrenze bleibt die Zuordnung zum Raum des messenden Sensors erhalten.
 Kalibrierung und Türpositionen bestimmen weiterhin die Genauigkeit.
+
+### Lichtnachlauf auf der Karte
+
+Unter „Überblendzeiten · Lichtnachlauf“ lässt sich die Nachlaufzeit je Raum mit
+zugeordnetem Licht einstellen (0–3600 Sekunden). Sie beginnt, nachdem der Raum
+als frei erkannt wurde, und wird in den bestehenden Raumoptionen gespeichert.
+Ein- und Ausblenden sowie der Sicherheitstimeout bleiben davon unabhängig.
