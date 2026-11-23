@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.6
+
+- Keep the last requested brightness when restarting an active fade-in. Start
+  transition-capable lights directly at the configured pre-light level on entry.
+
 ## 0.4.5
 
 - Include an original Radar Occupancy icon for Home Assistant 2026.3 and

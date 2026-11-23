@@ -118,6 +118,7 @@ class LightController:
         self.last_command: dict[str, float] = {}
         self.internal: set[str] = set()
         self.fades: dict[str, asyncio.Task] = {}
+        self.rising_levels: dict[str, dict[str, int]] = {}
         self.slots = asyncio.Semaphore(const.LIGHT_SLOTS)
 
     # Helpers ------------------------------------------------------------
@@ -361,10 +362,10 @@ class LightController:
         return self.home.fade_out if direction == "off" else self.home.fade_in
 
     def switch_on(self, light: str, targets: list[Target], direction: str) -> None:
-        self.cancel_fade(light)
         if self.fade_time(direction) > 0:
             self.start_fade(light, targets, direction)
             return
+        self.cancel_fade(light)
         self.mark(light)
         if any(t.entry.options.get(CONF_REMEMBER_BRIGHTNESS) for t in targets) or direction == "approach":
             factor = self.approach_factor() if direction == "approach" else 1
@@ -421,11 +422,13 @@ class LightController:
     # Fades --------------------------------------------------------------
 
     def cancel_fade(self, light: str) -> None:
+        self.rising_levels.pop(light, None)
         task = self.fades.get(light)
         if task and not task.done():
             task.cancel()
 
     def cancel_all(self) -> None:
+        self.rising_levels.clear()
         for task in list(self.fades.values()):
             task.cancel()
         for st in self.state.values():
@@ -433,15 +436,33 @@ class LightController:
             st.prelit_since = None
 
     def start_fade(self, light: str, targets: list[Target], direction: str) -> asyncio.Task:
+        # Keep the last dispatched brightness when occupancy takes over
+        # from a running pre-light, even if the device still reports off.
+        levels = self.rising_levels.get(light, {}) if direction != "off" else {}
         self.cancel_fade(light)
+        if direction != "off":
+            self.rising_levels[light] = levels
         self.mark(light)
-        task = self.hass.async_create_task(self._fade(light, targets, direction, self.context()))
+        # A light service can report back synchronously and trigger another
+        # evaluation. Register the task before it sends the first command.
+        task = self.hass.async_create_task(
+            self._fade(light, targets, direction, self.context(), levels), eager_start=False
+        )
         self.fades[light] = task
         # State reports arriving after the fade are still our own.
         task.add_done_callback(lambda _: self.mark(light))
         return task
 
-    async def _fade(self, light: str, targets: list[Target], direction: str, context: Context) -> None:
+    async def _fade(
+        self,
+        light: str,
+        targets: list[Target],
+        direction: str,
+        context: Context,
+        levels: dict[str, int],
+    ) -> None:
+        owner = asyncio.current_task()
+        previous = levels.copy()
         leaves = self.leaves(light)
         if direction == "off":
             # Fading out never switches anything on: lights already off stay untouched.
@@ -464,6 +485,7 @@ class LightController:
                 # From the darkest step the first command of a cloud lamp
                 # gave no usable light for a second or two.
                 start[leaf] = max(1, round(goal[leaf] * self.approach_factor()))
+        start.update({leaf: previous[leaf] for leaf in leaves if leaf in previous})
         duration = max(self.fade_time(direction), const.FADE_STEP)
         sent: dict[str, int] = {}
         inflight: dict[str, asyncio.Task] = {}
@@ -479,9 +501,14 @@ class LightController:
         def send(leaf: str, value: int, transition: float | None = None) -> None:
             async def run() -> None:
                 async with self.slots:
+                    # A replaced fade may still have a command queued for this slot.
+                    if self.fades.get(light) is not owner or owner.cancelling():
+                        return
                     data = {"entity_id": leaf, "brightness": value}
                     if transition is not None:
                         data["transition"] = transition
+                    if direction != "off":
+                        levels[leaf] = value
                     await self.hass.services.async_call("light", "turn_on", data, blocking=True, context=context)
 
             sent[leaf] = value
@@ -491,8 +518,8 @@ class LightController:
             # Devices may remember their last on-level while off. Establish
             # the dim starting point before asking their firmware to fade.
             for leaf in native:
-                if self.is_off(leaf):
-                    send(leaf, 1, 0)
+                if leaf not in previous and self.is_off(leaf):
+                    send(leaf, start[leaf], 0)
             await asyncio.gather(*inflight.values(), return_exceptions=True)
             steps = max(1, round(duration / const.FADE_STEP))
             loop = asyncio.get_running_loop()
@@ -574,8 +601,9 @@ class LightController:
                 if not task.done():
                     task.cancel()
             # A replaced fade must not clear the lock of its successor.
-            if self.fades.get(light) is asyncio.current_task():
+            if self.fades.get(light) is owner:
                 self.fades.pop(light, None)
+                self.rising_levels.pop(light, None)
                 self.internal.difference_update([*leaves, light])
 
     # Changes from outside -------------------------------------------------

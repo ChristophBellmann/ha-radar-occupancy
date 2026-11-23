@@ -482,7 +482,7 @@ async def test_native_fade_uses_interpolated_perceptual_waypoints(hass, flat, mo
     assert len(values) >= 10, "native interpolation must follow the perceptual curve"
     assert values == sorted(values, reverse=direction == "off")
     if direction == "enter":
-        assert values[0] == 1 and transitions[0] == 0, "off lamps start dim, never at their recalled on-level"
+        assert values[0] == round(102 * 0.3) and transitions[0] == 0
         assert values[-1] == 102
         transitions = transitions[1:]
     else:
@@ -490,6 +490,42 @@ async def test_native_fade_uses_interpolated_perceptual_waypoints(hass, flat, mo
         assert calls[-1][0] == "turn_off"
     assert all(value == 0.2 for value in transitions)
     assert len(transitions) <= 16, "device interpolation must not become a 20 Hz command stream"
+
+
+@pytest.mark.parametrize(
+    ("features", "direction", "threshold"), [(0, "enter", 50), (32, "enter", 50), (32, "approach", 20)]
+)
+async def test_enter_continues_fade_with_delayed_light_state(hass, flat, monkeypatch, features, direction, threshold):
+    real_sleep = asyncio.sleep
+
+    async def no_wait(_seconds):
+        await real_sleep(0)
+
+    monkeypatch.setattr(lights_module.asyncio, "sleep", no_wait)
+    light = "light.bed"
+    hass.states.async_set(light, "off", {"supported_color_modes": ["brightness"], "supported_features": features})
+    values = []
+    ramped_up = asyncio.Event()
+
+    async def record(call):
+        values.append(call.data["brightness"])
+        if values[-1] > threshold and not ramped_up.is_set():
+            ramped_up.set()
+            await asyncio.Event().wait()
+
+    hass.services.async_register("light", "turn_on", record)
+    await flat.setup(monkeypatch, lights={"bed": light})
+    await flat.set_fade(3, 3)
+    controller = hass.data[DOMAIN].lights
+    targets = controller.groups()[light]
+    first = controller.start_fade(light, targets, direction)
+    await asyncio.wait_for(ramped_up.wait(), timeout=5)
+    controller.switch_on(light, targets, "enter")
+    await controller.fades[light]
+    await asyncio.gather(first, return_exceptions=True)
+
+    assert values == sorted(values)
+    assert values[-1] == 102
 
 
 def test_legacy_ghost_counts_migrate_once_preserving_occupancy():
