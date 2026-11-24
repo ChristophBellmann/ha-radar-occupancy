@@ -214,6 +214,87 @@ async def test_daylight_keeps_light_off_but_owns_it(hass: HomeAssistant, freezer
     assert len(turn_off) == 1
 
 
+def no_fades(hass: HomeAssistant) -> None:
+    """Switch at once: fade steps never pass on the frozen clock."""
+    home = hass.data[DOMAIN].home
+    home.set_setting("fade_in", 0.0)
+    home.set_setting("fade_out", 0.0)
+
+
+async def test_daylight_switch_follows_outdoor_brightness(hass: HomeAssistant, freezer: FrozenDateTimeFactory) -> None:
+    from custom_components.radar_occupancy.const import CONF_DAYLIGHT, HOME_DEFAULTS, KIND_HOME
+
+    turn_on, _ = mock_lights(hass)
+    hass.states.async_set("sun.sun", "below_horizon")
+    hass.states.async_set("sensor.irradiance", "300", {"unit_of_measurement": "W/m²"})
+    hass.states.async_set("light.office", "off")
+    home = MockConfigEntry(
+        domain=DOMAIN,
+        title="Flat",
+        data={CONF_KIND: KIND_HOME},
+        options={**HOME_DEFAULTS, CONF_DAYLIGHT: "sensor.irradiance"},
+        unique_id="home",
+    )
+    office = room_entry("Office", "office", **{CONF_LIGHT: "light.office", CONF_RUN_ON: 0})
+    await setup(hass, home, office)
+    no_fades(hass)
+    await hass.services.async_call("switch", "turn_off", {"entity_id": "switch.office_only_when_dark"}, blocking=True)
+    assert hass.states.get("switch.office_only_when_dark").state == "off"
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": "switch.flat_only_when_dark_outside"}, blocking=True
+    )
+    assert hass.data[DOMAIN].home.snapshot()["daylight"] is True
+
+    async def enter() -> None:
+        see(hass, "office", 1000)
+        await hass.async_block_till_done()
+        lose(hass, "office")
+        await advance(hass, freezer, 2)
+        assert hass.states.is_state("light.office", "off")
+        await advance(hass, freezer, 300)  # next switch-off try only after OFF_RECHECK
+
+    await enter()  # bright outside although the sun has set
+    assert not turn_on
+    hass.states.async_set("sensor.irradiance", "40", {"unit_of_measurement": "W/m²"})
+    await enter()
+    assert len(turn_on) == 1
+    hass.states.async_set("sensor.irradiance", "unavailable")
+    await enter()  # no value: the sun decides
+    assert len(turn_on) == 2
+    hass.states.async_set("sensor.irradiance", "300", {"unit_of_measurement": "W/m²"})
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": "switch.flat_only_when_dark_outside"}, blocking=True
+    )
+    await enter()  # switch off: brightness no longer matters
+    assert len(turn_on) == 3
+
+
+async def test_only_dark_uses_daylight_sensor(hass: HomeAssistant, freezer: FrozenDateTimeFactory) -> None:
+    from custom_components.radar_occupancy.const import (
+        CONF_DAYLIGHT,
+        CONF_DAYLIGHT_THRESHOLD,
+        HOME_DEFAULTS,
+        KIND_HOME,
+    )
+
+    turn_on, _ = mock_lights(hass)
+    hass.states.async_set("sun.sun", "above_horizon")
+    hass.states.async_set("sensor.outdoor_lux", "2000", {"unit_of_measurement": "lx"})
+    hass.states.async_set("light.office", "off")
+    home = MockConfigEntry(
+        domain=DOMAIN,
+        title="Flat",
+        data={CONF_KIND: KIND_HOME},
+        options={**HOME_DEFAULTS, CONF_DAYLIGHT: "sensor.outdoor_lux", CONF_DAYLIGHT_THRESHOLD: 5000},
+        unique_id="home",
+    )
+    await setup(hass, home, room_entry("Office", "office", **{CONF_LIGHT: "light.office", CONF_RUN_ON: 0}))
+    no_fades(hass)
+    see(hass, "office", 1000)  # overcast: dark enough although the sun is up
+    await hass.async_block_till_done()
+    assert len(turn_on) == 1
+
+
 async def test_light_kept_while_other_room_with_same_light_occupied(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:

@@ -42,7 +42,10 @@ Grundrissen Raumgrenzen zeichnen und Türen und Ausgänge markieren.
 ## Licht
 
 - Einschalten beim Betreten, Ausschalten nach der Nachlaufzeit, wenn alle
-  gegangen sind; „Nur bei Dunkelheit“ und Zeitfenster.
+  gegangen sind; „Nur bei Dunkelheit“ und Zeitfenster. Dunkel heißt: unter
+  der Schwelle eines Helligkeitssensors (z. B. Globalstrahlung eines
+  Wetterdienstes), sonst Sonne unter dem Horizont. „Helligkeitsabhängig“ in
+  der Wohnung gilt für alle Räume.
 - Weiches Ein- und Ausblenden in wahrnehmungsgleichen Schritten.
 - **Vorlicht** beim Zugehen auf eine Tür (30 %); **volles Licht schon vor
   dem Betreten**, wenn das Radar des Zielraums die Person bereits durch die

@@ -55,6 +55,8 @@ CONF_REMEMBER_BRIGHTNESS = "remember_brightness"  # fade to the last brightness 
 # Home entry
 CONF_MANUAL_OFF_RESET = "manual_off_reset"  # minutes empty until "switched off by hand" ends
 CONF_APPROACH_BRIGHTNESS = "approach_brightness"  # % of the target brightness when pre-lighting
+CONF_DAYLIGHT = "daylight_entity"  # outdoor brightness, e.g. global irradiance from a weather service
+CONF_DAYLIGHT_THRESHOLD = "daylight_threshold"  # dark below this value, in the sensor's unit
 
 DEFAULTS = {
     CONF_DOOR_FROM: 0,
@@ -74,6 +76,7 @@ DEFAULTS = {
 HOME_DEFAULTS = {
     CONF_MANUAL_OFF_RESET: 30,
     CONF_APPROACH_BRIGHTNESS: 30,
+    CONF_DAYLIGHT_THRESHOLD: 100,
 }
 
 # Light control

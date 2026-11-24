@@ -98,6 +98,7 @@ class ReplayHome:
     def __init__(self, source, counts):
         self.entry = source.entry
         self.light_automation = True
+        self.daylight, self.dark = source.daylight, source.dark  # outdoor brightness as now
         self.fade_in, self.fade_out = source.fade_in, source.fade_out
         self.start = self.now = dt_util.utcnow().timestamp()
         self.tracking = Presence(

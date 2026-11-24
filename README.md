@@ -138,8 +138,8 @@ handover off unless one person lives in the home, or switch
 
 With a light configured:
 
-- **Entering** switches the light on (brightness, *Only when dark* via
-  `sun.sun`, time window): the room's count rises, or in map mode someone
+- **Entering** switches the light on (brightness, *Only when dark* via a
+  daylight sensor or `sun.sun`, time window): the room's count rises, or in map mode someone
   comes in through a door while the room is still held. Moving around inside
   the room switches nothing. If it gets dark (or the time window opens)
   while someone is in the room, the light comes on when they are next seen.

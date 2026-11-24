@@ -16,6 +16,8 @@ from homeassistant.helpers import selector as sel
 from .const import (
     CONF_APPROACH_BRIGHTNESS,
     CONF_BRIGHTNESS,
+    CONF_DAYLIGHT,
+    CONF_DAYLIGHT_THRESHOLD,
     CONF_DISTANCE,
     CONF_DOOR_FROM,
     CONF_DOOR_ROOMS,
@@ -175,6 +177,10 @@ def home_settings(values: dict[str, Any]) -> dict:
     return {
         _default(CONF_MANUAL_OFF_RESET, values): _number(0, 1440, "min"),
         _default(CONF_APPROACH_BRIGHTNESS, values): _number(1, 100, "%"),
+        _optional(CONF_DAYLIGHT, values): _entity("sensor"),
+        vol.Required(CONF_DAYLIGHT_THRESHOLD, default=values[CONF_DAYLIGHT_THRESHOLD]): sel.NumberSelector(
+            sel.NumberSelectorConfig(min=0, max=200000, step="any", mode=sel.NumberSelectorMode.BOX)
+        ),
     }
 
 

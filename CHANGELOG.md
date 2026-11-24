@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.7
+
+- Darkness from outdoor brightness: the home options take a daylight sensor
+  (e.g. global irradiance from a weather service) and a *Dark below*
+  threshold. *Only when dark* uses it instead of the sun; without a value
+  the sun applies.
+- New home switch *Only when dark outside*, also in the position card next to
+  *Light automation*: lights of all rooms only come on while it is dark.
+
 ## 0.4.6
 
 - Keep the last requested brightness when restarting an active fade-in. Start

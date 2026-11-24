@@ -164,11 +164,17 @@ class LightController:
                 groups.setdefault(target.light, []).append(target)
         return groups
 
+    def dark(self) -> bool:
+        """Dark outside: below the daylight threshold of the home, else the sun has set."""
+        dark = self.home.dark() if self.home else None
+        if dark is not None:
+            return dark
+        sun = self.hass.states.get("sun.sun")
+        return sun is None or sun.state == "below_horizon"
+
     def allowed(self, target: Target) -> bool:
-        if target.only_dark:
-            sun = self.hass.states.get("sun.sun")
-            if sun is not None and sun.state != "below_horizon":
-                return False
+        if (target.only_dark or (self.home and self.home.daylight)) and not self.dark():
+            return False
         options = target.entry.options
         start = options.get(CONF_WINDOW_START, DEFAULTS[CONF_WINDOW_START])
         end = options.get(CONF_WINDOW_END, DEFAULTS[CONF_WINDOW_END])

@@ -10,7 +10,7 @@ Entity IDs follow your entry names; `<room>` and `<home>` stand for them.
 | `sensor.<room>_last_seen_distance` | where the radar last saw a target (rooms) |
 | `switch.<room>_hold_occupancy` | off: the room follows live presence only (rooms) |
 | `switch.<room>_automatic_light` | light automation of this room (with a light) |
-| `switch.<room>_only_when_dark` | only when `sun.sun` is below the horizon (with a light) |
+| `switch.<room>_only_when_dark` | only while dark outside: daylight sensor of the home, else `sun.sun` (with a light) |
 | `button.<room>_release` | clear a held occupancy; refused while a target is present |
 | `button.<room>_learn_door_from_last_exit` | set the door range from the last exit |
 
@@ -31,6 +31,7 @@ Entity IDs follow your entry names; `<room>` and `<home>` stand for them.
 | Entity | |
 | --- | --- |
 | `switch.<home>_light_automation` | master switch for all lights |
+| `switch.<home>_only_when_dark_outside` | lights of all rooms only while dark outside |
 | `switch.<home>_map_mode` | off: every room uses its distance rule |
 | `switch.<home>_handover_between_rooms` | handover in the distance rule |
 | `number.<home>_fade_in` | fade-in time in seconds, 0 = switch |

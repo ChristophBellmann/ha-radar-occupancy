@@ -40,6 +40,9 @@
       "light_automation": {
         "default": "mdi:lightbulb-auto-outline"
       },
+      "daylight": {
+        "default": "mdi:theme-light-dark"
+      },
       "map_mode": {
         "default": "mdi:floor-plan"
       },

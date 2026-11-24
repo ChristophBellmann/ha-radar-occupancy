@@ -125,11 +125,15 @@
         "title": "Wohnung",
         "data": {
           "manual_off_reset": "„Von Hand aus“ endet, wenn der Raum so lange leer war",
-          "approach_brightness": "Vorblenden bei Annäherung an die Tür"
+          "approach_brightness": "Vorblenden bei Annäherung an die Tür",
+          "daylight_entity": "Helligkeitssensor",
+          "daylight_threshold": "Dunkel unter"
         },
         "data_description": {
           "manual_off_reset": "Ein im belegten Raum von Hand ausgeschaltetes Licht bleibt aus, auch nach kurzem Verlassen. 0: nur bis zum nächsten Betreten.",
-          "approach_brightness": "Anteil der Zielhelligkeit, während jemand auf den Raum zugeht (Kartenmodus)."
+          "approach_brightness": "Anteil der Zielhelligkeit, während jemand auf den Raum zugeht (Kartenmodus).",
+          "daylight_entity": "Außenhelligkeit, z. B. Globalstrahlung eines Wetterdienstes in W/m². „Helligkeitsabhängig“ und „Nur bei Dunkelheit“ nutzen ihn statt des Sonnenstands; ohne Messwert gilt der Sonnenstand.",
+          "daylight_threshold": "In der Einheit des Helligkeitssensors. Für Globalstrahlung etwa 100 W/m²."
         }
       },
       "plan": {
@@ -178,6 +182,9 @@
       },
       "light_automation": {
         "name": "Lichtautomatik"
+      },
+      "daylight": {
+        "name": "Helligkeitsabhängig"
       },
       "map_mode": {
         "name": "Kartenmodus"

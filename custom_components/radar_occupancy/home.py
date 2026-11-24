@@ -166,6 +166,8 @@ class Home:
         self.light_automation: bool = settings.get("light_automation", True)
         # Off pauses handover between rooms of the distance rule, e.g. with visitors.
         self.handover: bool = settings.get("handover", True)
+        # On: the light only comes on while it is dark outside (daylight sensor, else the sun).
+        self.daylight: bool = settings.get("daylight", False)
         self.fade_in: float = settings.get("fade_in", 2.0)
         self.fade_out: float = settings.get("fade_out", 3.0)
         # People living here incl. regular guests: an upper bound for the counts.
@@ -219,6 +221,26 @@ class Home:
         self.publish()
 
     # Queries used by targets and lights -----------------------------------
+
+    def brightness(self) -> float | None:
+        """Outdoor brightness from the daylight sensor; None without a usable value."""
+        entity_id = self.entry.options.get(const.CONF_DAYLIGHT)
+        state = self.hass.states.get(entity_id) if entity_id else None
+        try:
+            value = float(state.state) if state else None
+        except ValueError:
+            return None
+        return value if value is not None and math.isfinite(value) else None
+
+    def dark(self) -> bool | None:
+        """Below the daylight threshold; None without a usable daylight sensor."""
+        value = self.brightness()
+        if value is None:
+            return None
+        threshold = self.entry.options.get(
+            const.CONF_DAYLIGHT_THRESHOLD, const.HOME_DEFAULTS[const.CONF_DAYLIGHT_THRESHOLD]
+        )
+        return value < float(threshold)
 
     def uses_map(self, entry_id: str) -> bool:
         return self.map_mode and entry_id in self.ready
@@ -663,6 +685,8 @@ class Home:
             "simulation": manager.simulation.snapshot() if manager.simulation else manager.simulation_result,
             "map_mode": self.map_mode,
             "light_automation": self.light_automation,
+            "daylight": self.daylight,
+            "outdoor_brightness": self.brightness(),
             "fade_in": self.fade_in,
             "fade_out": self.fade_out,
             "max_people": self.max_people,

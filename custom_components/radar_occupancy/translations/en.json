@@ -125,11 +125,15 @@
         "title": "Home",
         "data": {
           "manual_off_reset": "Switched off by hand ends after the room was empty for",
-          "approach_brightness": "Pre-light when approaching the door"
+          "approach_brightness": "Pre-light when approaching the door",
+          "daylight_entity": "Daylight sensor",
+          "daylight_threshold": "Dark below"
         },
         "data_description": {
           "manual_off_reset": "A light switched off by hand in an occupied room stays off, also after leaving briefly. 0: only until the next entering.",
-          "approach_brightness": "Share of the target brightness while someone walks towards the room (map mode)."
+          "approach_brightness": "Share of the target brightness while someone walks towards the room (map mode).",
+          "daylight_entity": "Outdoor brightness, e.g. global irradiance from a weather service in W/m². \"Only when dark outside\" and \"Only when dark\" use it instead of the sun; while it has no value, the sun applies.",
+          "daylight_threshold": "In the unit of the daylight sensor. For global irradiance about 100 W/m²."
         }
       },
       "plan": {
@@ -178,6 +182,9 @@
       },
       "light_automation": {
         "name": "Light automation"
+      },
+      "daylight": {
+        "name": "Only when dark outside"
       },
       "map_mode": {
         "name": "Map mode"

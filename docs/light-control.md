@@ -12,9 +12,15 @@ The light comes on when somebody **enters**:
 - map mode: the room's count rises, or somebody comes in through a door while
   the room is still held.
 
-Conditions: *Automatic light* on, *Only when dark* (via `sun.sun`, if
-enabled), the time window, and the home's master switch
-`switch.<home>_light_automation`.
+Conditions: *Automatic light* on, *Only when dark* (if enabled), the time
+window, and the home's master switch `switch.<home>_light_automation`.
+
+Dark means below the home's *Dark below* threshold of its *Daylight sensor*
+(home options), for example global irradiance from a weather service in
+W/m²; without a sensor or a usable value, `sun.sun` below the horizon. The
+home switch `switch.<home>_only_when_dark_outside` applies this condition
+to every room, so lights stay off on bright days and come on on dark,
+overcast ones.
 
 Moving around inside the room switches nothing. If it gets dark (or the time
 window opens) while somebody is in the room, the light comes on when they are
@@ -66,7 +72,8 @@ A light switched off in an occupied room stays off — see
 | --- | --- |
 | `switch.<home>_light_automation` | all lights of the integration |
 | `switch.<room>_automatic_light` | this room's light |
-| `switch.<room>_only_when_dark` | only when `sun.sun` is below the horizon |
+| `switch.<home>_only_when_dark_outside` | all rooms: only while dark outside |
+| `switch.<room>_only_when_dark` | this room: only while dark outside |
 
 The occupancy sensor's attributes `light_owned` and `light_mode` (`auto` or
 `manual_off`) show the current state of the light controller.
