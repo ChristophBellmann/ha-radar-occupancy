@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.8
+
+- Fix saving the options of the home and of floor plans: their forms had no
+  step to receive the answer (Home Assistant 2026.11 refuses to open them).
+
 ## 0.4.7
 
 - Darkness from outdoor brightness: the home options take a daylight sensor

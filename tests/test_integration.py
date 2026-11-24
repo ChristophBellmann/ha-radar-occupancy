@@ -150,6 +150,30 @@ async def test_options_flow_updates_door_range(hass: HomeAssistant) -> None:
     assert entry.state is ConfigEntryState.LOADED
 
 
+async def test_home_options_flow_saves_daylight_sensor(hass: HomeAssistant) -> None:
+    from custom_components.radar_occupancy.const import (
+        CONF_DAYLIGHT,
+        CONF_DAYLIGHT_THRESHOLD,
+        HOME_DEFAULTS,
+        KIND_HOME,
+    )
+
+    home = MockConfigEntry(
+        domain=DOMAIN, title="Flat", data={CONF_KIND: KIND_HOME}, options=dict(HOME_DEFAULTS), unique_id="home"
+    )
+    await setup(hass, home)
+    result = await hass.config_entries.options.async_init(home.entry_id)
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "home"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**HOME_DEFAULTS, CONF_DAYLIGHT: "sensor.irradiance", CONF_DAYLIGHT_THRESHOLD: 80}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+    assert home.options[CONF_DAYLIGHT] == "sensor.irradiance"
+    assert home.options[CONF_DAYLIGHT_THRESHOLD] == 80
+
+
 async def test_still_person_held_door_releases(hass: HomeAssistant, freezer: FrozenDateTimeFactory) -> None:
     await setup(hass, room_entry("Office", "office", **{CONF_DOOR_FROM: 4000}))
     see(hass, "office", 900)

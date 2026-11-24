@@ -369,3 +369,11 @@ class RadarOccupancyOptionsFlow(OptionsFlow):
                 }
             )
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
+
+    # The home and floor plan forms are shown under their own step ids, so
+    # their answers arrive here.
+    async def async_step_home(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        return await self.async_step_init(user_input)
+
+    async def async_step_plan(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        return await self.async_step_init(user_input)
